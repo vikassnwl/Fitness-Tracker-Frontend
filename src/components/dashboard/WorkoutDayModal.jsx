@@ -560,7 +560,7 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
                 {savingWorkoutLog ? 'Saving...' : 'Save Log'}
               </button>
             )}
-            {activeTab === 'workout' && detail && (
+            {activeTab === 'workout' && (isPlanningPush || workout) && (
               <button
                 onClick={handleSaveWorkoutLog}
                 disabled={savingWorkoutLog || loading}
