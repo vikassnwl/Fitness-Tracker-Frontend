@@ -1,0 +1,178 @@
+import { useEffect, useState } from 'react'
+import { fetchWorkouts } from '../../api/workouts'
+import WorkoutDayModal from './WorkoutDayModal'
+
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+const WORKOUT_TYPE_COLORS = {
+  push:   'bg-indigo-500',
+  pull:   'bg-violet-500',
+  legs:   'bg-emerald-500',
+  upper:  'bg-sky-500',
+  lower:  'bg-orange-500',
+  full:   'bg-pink-500',
+  custom: 'bg-slate-400',
+}
+
+function WorkoutCalendar() {
+  const today = new Date()
+  const [viewYear, setViewYear] = useState(today.getFullYear())
+  const [viewMonth, setViewMonth] = useState(today.getMonth())
+  // Map of "YYYY-MM-DD" -> workout object
+  const [workoutMap, setWorkoutMap] = useState({})
+  const [loading, setLoading] = useState(true)
+  const [selectedDate, setSelectedDate] = useState(null)
+  const [selectedWorkout, setSelectedWorkout] = useState(null)
+
+  useEffect(() => {
+    fetchWorkouts()
+      .then((res) => {
+        const list = res.data.results ?? res.data
+        const map = {}
+        list.forEach((w) => {
+          if (w.date) map[w.date] = w
+        })
+        setWorkoutMap(map)
+      })
+      .catch((err) => console.error('Failed to load workouts for calendar', err))
+      .finally(() => setLoading(false))
+  }, [])
+
+  // Calendar grid math
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay()
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7
+
+  const monthLabel = new Date(viewYear, viewMonth).toLocaleString('default', {
+    month: 'long',
+    year: 'numeric',
+  })
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewYear((y) => y - 1); setViewMonth(11) }
+    else setViewMonth((m) => m - 1)
+  }
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewYear((y) => y + 1); setViewMonth(0) }
+    else setViewMonth((m) => m + 1)
+  }
+
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+
+  const handleWorkoutCreated = (createdWorkout) => {
+    if (!createdWorkout?.date) return
+    setWorkoutMap((prev) => ({ ...prev, [createdWorkout.date]: createdWorkout }))
+    setSelectedWorkout(createdWorkout)
+  }
+
+  return (
+    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+      {/* Header */}
+      <div className="mb-5 flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-white">Workout Calendar</h2>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={prevMonth}
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
+          >
+            ‹
+          </button>
+          <span className="min-w-[140px] text-center text-sm font-medium text-slate-300">
+            {monthLabel}
+          </span>
+          <button
+            onClick={nextMonth}
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
+          >
+            ›
+          </button>
+        </div>
+      </div>
+
+      {/* Day headers */}
+      <div className="mb-2 grid grid-cols-7 text-center">
+        {DAYS.map((d) => (
+          <div key={d} className="text-xs font-medium uppercase tracking-wider text-slate-500">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Calendar grid */}
+      {loading ? (
+        <div className="py-10 text-center text-sm text-slate-500">Loading…</div>
+      ) : (
+        <div className="grid grid-cols-7 gap-1">
+          {Array.from({ length: totalCells }).map((_, i) => {
+            const dayNum = i - firstDay + 1
+            const isInMonth = dayNum >= 1 && dayNum <= daysInMonth
+            const dateStr = isInMonth
+              ? `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`
+              : null
+            const workout = dateStr ? workoutMap[dateStr] : null
+            const isToday = dateStr === todayStr
+
+            return (
+              <button
+                key={i}
+                disabled={!isInMonth}
+                onClick={() => {
+                  if (!isInMonth) return
+                  setSelectedDate(dateStr)
+                  setSelectedWorkout(workout || null)
+                }}
+                className={[
+                  'relative flex flex-col items-center justify-start rounded-xl p-1.5 pt-1 text-xs transition',
+                  !isInMonth && 'opacity-0 pointer-events-none',
+                  isInMonth && 'cursor-pointer hover:bg-slate-800',
+                  isInMonth && !workout && 'text-slate-500',
+                  isToday && !workout && 'ring-1 ring-inset ring-indigo-500/50',
+                ].filter(Boolean).join(' ')}
+              >
+                <span
+                  className={[
+                    'flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium',
+                    isToday ? 'bg-indigo-500 text-white' : workout ? 'text-white' : 'text-slate-500',
+                  ].join(' ')}
+                >
+                  {isInMonth ? dayNum : ''}
+                </span>
+                {workout && (
+                  <span
+                    className={[
+                      'mt-0.5 h-1.5 w-1.5 rounded-full',
+                      WORKOUT_TYPE_COLORS[workout.workout_type] ?? 'bg-slate-400',
+                    ].join(' ')}
+                  />
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Legend */}
+      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5">
+        {Object.entries(WORKOUT_TYPE_COLORS).map(([type, cls]) => (
+          <div key={type} className="flex items-center gap-1.5 text-xs text-slate-500">
+            <span className={`h-2 w-2 rounded-full ${cls}`} />
+            {type.charAt(0).toUpperCase() + type.slice(1)}
+          </div>
+        ))}
+      </div>
+
+      <WorkoutDayModal
+        isOpen={Boolean(selectedDate)}
+        date={selectedDate}
+        workout={selectedWorkout}
+        onWorkoutCreated={handleWorkoutCreated}
+        onClose={() => {
+          setSelectedDate(null)
+          setSelectedWorkout(null)
+        }}
+      />
+    </div>
+  )
+}
+
+export default WorkoutCalendar
