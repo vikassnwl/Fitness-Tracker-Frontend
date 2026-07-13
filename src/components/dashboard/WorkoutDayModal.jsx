@@ -67,6 +67,7 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
     meal2: false,
     meal3: false,
     meal4: false,
+    meal5: false,
   })
 
   useEffect(() => {
@@ -147,12 +148,13 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
             meal2: res.data.meal2 || false,
             meal3: res.data.meal3 || false,
             meal4: res.data.meal4 || false,
+            meal5: res.data.meal5 || false,
           })
         }
       })
       .catch(() => {
         if (!isCancelled) {
-          setDietLog({ meal1: false, meal2: false, meal3: false, meal4: false })
+          setDietLog({ meal1: false, meal2: false, meal3: false, meal4: false, meal5: false })
         }
       })
 
@@ -326,11 +328,11 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
     setSavingWorkoutLog(true)
     try {
       await deleteDietLog(date)
-      setDietLog({ meal1: false, meal2: false, meal3: false, meal4: false })
+      setDietLog({ meal1: false, meal2: false, meal3: false, meal4: false, meal5: false })
       onClose()
     } catch (err) {
       if (err?.response?.status === 404) {
-        setDietLog({ meal1: false, meal2: false, meal3: false, meal4: false })
+        setDietLog({ meal1: false, meal2: false, meal3: false, meal4: false, meal5: false })
         onClose()
       } else {
         console.error('Failed to delete diet log', err)
@@ -525,7 +527,13 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
           {activeTab === 'diet' && (
             <div className="space-y-3">
               <div className="space-y-2">
-                {['meal1', 'meal2', 'meal3', 'meal4'].map((meal, idx) => (
+                {[
+                  ['meal1', 'Morning Shake'],
+                  ['meal2', 'Breakfast'],
+                  ['meal3', 'Lunch'],
+                  ['meal4', 'Evening Shake'],
+                  ['meal5', 'Dinner'],
+                ].map(([meal, label]) => (
                   <label key={meal} className="flex items-center gap-3 cursor-pointer">
                     <input
                       type="checkbox"
@@ -533,7 +541,7 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
                       onChange={(e) => setDietLog({ ...dietLog, [meal]: e.target.checked })}
                       className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-indigo-500 focus:ring-indigo-500 cursor-pointer"
                     />
-                    <span className="text-sm text-slate-300">Meal {idx + 1}</span>
+                    <span className="text-sm text-slate-300">{label}</span>
                   </label>
                 ))}
               </div>
