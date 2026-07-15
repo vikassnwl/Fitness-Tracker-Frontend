@@ -325,18 +325,18 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 dark:bg-black/60"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-lg h-[85vh] flex flex-col rounded-3xl border border-slate-800 bg-slate-900 shadow-2xl"
+        className="relative w-full max-w-lg h-[85vh] flex flex-col rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900"
         onClick={(e) => e.stopPropagation()}
       >
         <style>{`@keyframes modalToastSlideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
         {toastMessage && (
           <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2">
             <div
-              className="rounded-lg border border-emerald-700/50 bg-emerald-900/85 px-3 py-1.5 text-xs font-medium text-emerald-100 shadow-lg"
+              className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 shadow-lg dark:border-emerald-700/50 dark:bg-emerald-900/85 dark:text-emerald-100"
               style={{ animation: 'modalToastSlideDown 180ms ease-out' }}
             >
               {toastMessage}
@@ -344,30 +344,30 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
           </div>
         )}
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 p-6 pb-0 border-b border-slate-800">
+        <div className="flex items-start justify-between gap-4 p-6 pb-0 border-b border-slate-200 dark:border-slate-800">
           <div>
             {modalTitle && (
-              <h2 className="text-xl font-semibold text-white">
+              <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
                 {modalTitle}
               </h2>
             )}
-            <p className="mt-0.5 mb-1 text-sm text-slate-400">{formattedDate}</p>
+            <p className="mt-0.5 mb-1 text-sm text-slate-500 dark:text-slate-400">{formattedDate}</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition">
+          <button onClick={onClose} className="text-slate-400 transition hover:text-slate-900 dark:hover:text-white">
             ✕
           </button>
         </div>
 
         {(isPlanningWorkout || workout) && (
           <div className="px-6 py-6">
-            <h3 className="text-sm font-semibold text-white">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
               Log Performed Sets
             </h3>
           </div>
         )}
 
         {/* Body */}
-        <div className="overflow-y-auto flex-1 px-6 pb-6 pt-0 space-y-4 [scrollbar-width:thin] [scrollbar-color:#334155_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-700 [&::-webkit-scrollbar-thumb:hover]:bg-slate-600">
+        <div className="overflow-y-auto flex-1 px-6 pb-6 pt-0 space-y-4 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent] dark:[scrollbar-color:#334155_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb:hover]:bg-slate-400 dark:[&::-webkit-scrollbar-thumb]:bg-slate-700 dark:[&::-webkit-scrollbar-thumb:hover]:bg-slate-600">
           {loading ? (
             <div className="py-10 text-center text-sm text-slate-500">Loading…</div>
           ) : !isPlanningWorkout && !workout ? null : !displayedExercises.length ? (
@@ -376,12 +376,12 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
             </div>
           ) : (
             displayedExercises.map((exercise) => (
-                <div key={exercise.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <div key={exercise.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
                   {/* Exercise header */}
                   <div className="mb-3 flex items-baseline gap-2">
-                    <h3 className="font-semibold text-white">{exercise.exercise_name ?? exercise.custom_name ?? 'Exercise'}</h3>
+                    <h3 className="font-semibold text-slate-900 dark:text-white">{exercise.exercise_name ?? exercise.custom_name ?? 'Exercise'}</h3>
                     {exercise._mode === 'logged' && exercise.muscle_group && (
-                      <span className="rounded-full bg-indigo-500/15 px-2 py-0.5 text-xs text-indigo-300">
+                      <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-xs text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">
                         {exercise.muscle_group}
                       </span>
                     )}
@@ -389,10 +389,10 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
 
                   {/* Sets table */}
                   {exercise.sets?.length ? (
-                    <div className="overflow-hidden rounded-xl border border-slate-800">
+                    <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b border-slate-800 text-left text-xs uppercase tracking-wider text-slate-500">
+                          <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500 dark:border-slate-800">
                             <th className="px-3 py-2">Set</th>
                             <th className="px-3 py-2">Weight</th>
                             <th className="px-3 py-2">Reps</th>
@@ -403,12 +403,12 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
                             <tr
                               key={set.id ?? `${exercise.id}-${set.set_number}`}
                               className={[
-                                'border-b border-slate-800/60 last:border-0',
-                                exercise._mode === 'logged' && set.completed ? 'bg-emerald-950/20' : '',
+                                'border-b border-slate-200/80 last:border-0 dark:border-slate-800/60',
+                                exercise._mode === 'logged' && set.completed ? 'bg-emerald-50 dark:bg-emerald-950/20' : '',
                               ].join(' ')}
                             >
-                              <td className="px-3 py-2 text-slate-400">{set.set_number}</td>
-                              <td className="px-3 py-2 font-medium text-white">
+                              <td className="px-3 py-2 text-slate-500 dark:text-slate-400">{set.set_number}</td>
+                              <td className="px-3 py-2 font-medium text-slate-900 dark:text-white">
                                 <div className="flex items-center gap-2">
                                   <input
                                     type="number"
@@ -423,12 +423,12 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
                                       }
                                     }}
                                     disabled={savingWorkoutLog}
-                                    className="w-20 rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                                    className="w-20 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                                   />
                                   <span className="text-xs text-slate-500">kg</span>
                                 </div>
                               </td>
-                              <td className="px-3 py-2 font-medium text-white">
+                              <td className="px-3 py-2 font-medium text-slate-900 dark:text-white">
                                 <input
                                   type="number"
                                   min="0"
@@ -441,7 +441,7 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
                                     }
                                   }}
                                   disabled={savingWorkoutLog}
-                                  className="w-20 rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                                  className="w-20 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                                 />
                               </td>
                             </tr>
@@ -450,7 +450,7 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
                       </table>
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-600">No sets recorded.</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-600">No sets recorded.</p>
                   )}
                 </div>
               ))
@@ -458,7 +458,7 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
         </div>
 
         {/* Footer */}
-        <div className="flex gap-3 border-t border-slate-800 p-4">
+        <div className="flex gap-3 border-t border-slate-200 p-4 dark:border-slate-800">
           <button
             onClick={handleDeleteWorkout}
             disabled={savingWorkoutLog || !detail}
