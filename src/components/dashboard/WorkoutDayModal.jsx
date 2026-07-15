@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createWorkout, fetchWorkout, fetchWorkouts, deleteWorkout } from '../../api/workouts'
 import { createExerciseSet, createWorkoutExercise, updateExerciseSet } from '../../api/exercises'
-import { fetchDietLog, saveDietLog, deleteDietLog } from '../../api/diet'
 
 const WEEKDAY_SPLIT = {
   1: 'Push',
@@ -22,8 +21,39 @@ const PUSH_SPLIT_EXERCISES = [
   'Tricep Overhead Extension',
 ]
 
-const buildDefaultPushPlan = () =>
-  PUSH_SPLIT_EXERCISES.map((exercise) => ({
+const PULL_SPLIT_EXERCISES = [
+  'Wide grip lat pull down',
+  'seated cable rows',
+  'single arm dumbbell rows',
+  'T bar rows',
+  'Rear delts',
+  'barbell curls',
+  'hammer curls',
+]
+
+const LEG_SPLIT_EXERCISES = [
+  'barbell squats',
+  'leg press',
+  'walking db lunges',
+  'leg curl',
+  'leg extension',
+  'calf raises',
+]
+
+const SPLIT_EXERCISES = {
+  Push: PUSH_SPLIT_EXERCISES,
+  Pull: PULL_SPLIT_EXERCISES,
+  Leg: LEG_SPLIT_EXERCISES,
+}
+
+const SPLIT_WORKOUT_TYPES = {
+  Push: 'push',
+  Pull: 'pull',
+  Leg: 'legs',
+}
+
+const buildDefaultPlan = (exerciseNames) =>
+  exerciseNames.map((exercise) => ({
     exercise,
     sets: [
       { set_number: 1, weight: '', reps: '' },
@@ -32,7 +62,7 @@ const buildDefaultPushPlan = () =>
     ],
   }))
 
-const buildPushPlanFromWorkout = (workoutDetail) => {
+const buildPlanFromWorkout = (workoutDetail, exerciseNames) => {
   const exercisesByName = new Map(
     (workoutDetail?.exercises || []).map((exercise) => [
       (exercise.exercise_name || exercise.custom_name || '').trim().toLowerCase(),
@@ -40,7 +70,7 @@ const buildPushPlanFromWorkout = (workoutDetail) => {
     ])
   )
 
-  return PUSH_SPLIT_EXERCISES.map((exerciseName) => {
+  return exerciseNames.map((exerciseName) => {
     const matchedExercise = exercisesByName.get(exerciseName.toLowerCase())
     const matchedSets = (matchedExercise?.sets || []).slice().sort((a, b) => a.set_number - b.set_number)
 
@@ -56,19 +86,11 @@ const buildPushPlanFromWorkout = (workoutDetail) => {
 }
 
 function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
-  const [activeTab, setActiveTab] = useState('workout')
   const [detail, setDetail] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [plannedPushPlan, setPlannedPushPlan] = useState(buildDefaultPushPlan())
+  const [plannedWorkoutPlan, setPlannedWorkoutPlan] = useState(buildDefaultPlan(PUSH_SPLIT_EXERCISES))
   const [savingWorkoutLog, setSavingWorkoutLog] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
-  const [dietLog, setDietLog] = useState({
-    meal1: false,
-    meal2: false,
-    meal3: false,
-    meal4: false,
-    meal5: false,
-  })
 
   useEffect(() => {
     if (!toastMessage) return
@@ -87,35 +109,42 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
     if (!workout) {
       setDetail(null)
       setLoading(false)
-      if (date && WEEKDAY_SPLIT[new Date(date + 'T00:00:00').getDay()] === 'Push') {
-        const loadPreviousPushValues = async () => {
+      const currentSplit = date ? WEEKDAY_SPLIT[new Date(date + 'T00:00:00').getDay()] : null
+      if (currentSplit === 'Push' || currentSplit === 'Pull' || currentSplit === 'Leg') {
+        const loadPreviousSplitValues = async () => {
           try {
             const workoutsRes = await fetchWorkouts()
             const workouts = workoutsRes.data.results ?? workoutsRes.data
-            const previousPushWorkout = workouts
-              .filter((entry) => entry.workout_type === 'push' && entry.date && entry.date < date)
+            const splitWorkoutType = SPLIT_WORKOUT_TYPES[currentSplit]
+            const previousSplitWorkout = workouts
+              .filter(
+                (entry) =>
+                  entry.workout_type === splitWorkoutType && entry.date && entry.date < date
+              )
               .sort((left, right) => right.date.localeCompare(left.date))[0]
 
-            if (!previousPushWorkout) {
+            if (!previousSplitWorkout) {
               if (!isCancelled) {
-                setPlannedPushPlan(buildDefaultPushPlan())
+                setPlannedWorkoutPlan(buildDefaultPlan(SPLIT_EXERCISES[currentSplit]))
               }
               return
             }
 
-            const previousWorkoutRes = await fetchWorkout(previousPushWorkout.id)
+            const previousWorkoutRes = await fetchWorkout(previousSplitWorkout.id)
             if (!isCancelled) {
-              setPlannedPushPlan(buildPushPlanFromWorkout(previousWorkoutRes.data))
+              setPlannedWorkoutPlan(
+                buildPlanFromWorkout(previousWorkoutRes.data, SPLIT_EXERCISES[currentSplit])
+              )
             }
           } catch (err) {
-            console.error('Failed to prefill previous Push workout values', err)
+            console.error(`Failed to prefill previous ${currentSplit} workout values`, err)
             if (!isCancelled) {
-              setPlannedPushPlan(buildDefaultPushPlan())
+              setPlannedWorkoutPlan(buildDefaultPlan(SPLIT_EXERCISES[currentSplit]))
             }
           }
         }
 
-        loadPreviousPushValues()
+        loadPreviousSplitValues()
       }
 
       return () => {
@@ -134,35 +163,6 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
     }
   }, [isOpen, workout, date])
 
-  // Separate effect for loading diet log
-  useEffect(() => {
-    if (!isOpen || !date) return
-
-    let isCancelled = false
-
-    fetchDietLog(date)
-      .then((res) => {
-        if (!isCancelled && res.data) {
-          setDietLog({
-            meal1: res.data.meal1 || false,
-            meal2: res.data.meal2 || false,
-            meal3: res.data.meal3 || false,
-            meal4: res.data.meal4 || false,
-            meal5: res.data.meal5 || false,
-          })
-        }
-      })
-      .catch(() => {
-        if (!isCancelled) {
-          setDietLog({ meal1: false, meal2: false, meal3: false, meal4: false, meal5: false })
-        }
-      })
-
-    return () => {
-      isCancelled = true
-    }
-  }, [isOpen, date])
-
   if (!isOpen) return null
 
   const formattedDate = date
@@ -173,8 +173,8 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
   const dayIndex = date ? new Date(date + 'T00:00:00').getDay() : null
   const plannedSplit = dayIndex !== null ? (WEEKDAY_SPLIT[dayIndex] ?? 'Rest') : ''
 
-  const handlePlannedPushSetChange = (exerciseIdx, setIdx, field, value) => {
-    setPlannedPushPlan((prev) =>
+  const handlePlannedWorkoutSetChange = (exerciseIdx, setIdx, field, value) => {
+    setPlannedWorkoutPlan((prev) =>
       prev.map((entry, entryIndex) => {
         if (entryIndex !== exerciseIdx) return entry
         return {
@@ -187,20 +187,21 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
     )
   }
 
-  const savePerformedPushLog = async () => {
-    if (!date || plannedSplit !== 'Push' || workout) return
+  const savePlannedWorkoutLog = async () => {
+    if (!date || workout || (plannedSplit !== 'Push' && plannedSplit !== 'Pull' && plannedSplit !== 'Leg')) return
 
     setSavingWorkoutLog(true)
     try {
+      const splitWorkoutType = SPLIT_WORKOUT_TYPES[plannedSplit]
       const createdWorkoutRes = await createWorkout({
-        name: 'Push Workout',
-        workout_type: 'push',
+        name: `${plannedSplit} Workout`,
+        workout_type: splitWorkoutType,
         date,
       })
       const createdWorkout = createdWorkoutRes.data
 
-      for (let exerciseIndex = 0; exerciseIndex < plannedPushPlan.length; exerciseIndex += 1) {
-        const exerciseEntry = plannedPushPlan[exerciseIndex]
+      for (let exerciseIndex = 0; exerciseIndex < plannedWorkoutPlan.length; exerciseIndex += 1) {
+        const exerciseEntry = plannedWorkoutPlan[exerciseIndex]
         const workoutExerciseRes = await createWorkoutExercise({
           workout: createdWorkout.id,
           exercise: null,
@@ -228,7 +229,7 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
       setDetail(fullWorkoutRes.data)
       setToastMessage('Log saved')
     } catch (err) {
-      console.error('Failed to save performed Push log', err)
+      console.error(`Failed to save performed ${plannedSplit} log`, err)
     } finally {
       setSavingWorkoutLog(false)
     }
@@ -288,21 +289,7 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
       return
     }
 
-    await savePerformedPushLog()
-  }
-
-  const handleSaveDietLog = async () => {
-    if (!date) return
-
-    setSavingWorkoutLog(true)
-    try {
-      await saveDietLog(date, dietLog)
-      setToastMessage('Log saved')
-    } catch (err) {
-      console.error('Failed to save diet log', err)
-    } finally {
-      setSavingWorkoutLog(false)
-    }
+    await savePlannedWorkoutLog()
   }
 
   const handleDeleteWorkout = async () => {
@@ -321,40 +308,13 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
     }
   }
 
-  const handleDeleteDietLog = async () => {
-    if (!date) return
-    if (!confirm('Delete this diet log?')) return
-
-    setSavingWorkoutLog(true)
-    try {
-      await deleteDietLog(date)
-      setDietLog({ meal1: false, meal2: false, meal3: false, meal4: false, meal5: false })
-      onClose()
-    } catch (err) {
-      if (err?.response?.status === 404) {
-        setDietLog({ meal1: false, meal2: false, meal3: false, meal4: false, meal5: false })
-        onClose()
-      } else {
-        console.error('Failed to delete diet log', err)
-      }
-    } finally {
-      setSavingWorkoutLog(false)
-    }
-  }
-
-  const handleDeleteLog = async () => {
-    if (activeTab === 'diet') {
-      await handleDeleteDietLog()
-      return
-    }
-
-    await handleDeleteWorkout()
-  }
-
-  const isPlanningPush = !workout && plannedSplit === 'Push'
+  const isPlanningWorkout = !workout && (plannedSplit === 'Push' || plannedSplit === 'Pull' || plannedSplit === 'Leg')
+  const modalTitle = workout
+    ? (detail?.name ?? workout.name)
+    : (isPlanningWorkout ? `${plannedSplit} Workout` : '')
   const loggedExercises = detail?.exercises ? [...detail.exercises].sort((a, b) => a.order - b.order) : []
-  const displayedExercises = isPlanningPush
-    ? plannedPushPlan.map((entry, entryIndex) => ({
+  const displayedExercises = isPlanningWorkout
+    ? plannedWorkoutPlan.map((entry, entryIndex) => ({
         id: `planned-${entryIndex}`,
         exercise_name: entry.exercise,
         sets: entry.sets,
@@ -383,12 +343,12 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
             </div>
           </div>
         )}
-        {/* Header with Tabs */}
+        {/* Header */}
         <div className="flex items-start justify-between gap-4 p-6 pb-0 border-b border-slate-800">
           <div>
-            {workout && (
+            {modalTitle && (
               <h2 className="text-xl font-semibold text-white">
-                {detail?.name ?? workout.name}
+                {modalTitle}
               </h2>
             )}
             <p className="mt-0.5 mb-1 text-sm text-slate-400">{formattedDate}</p>
@@ -398,47 +358,21 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
           </button>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex gap-0 border-b border-slate-800 px-6 pt-4">
-          <button
-            onClick={() => setActiveTab('workout')}
-            className={`pb-3 px-2 text-sm font-medium transition ${ 
-              activeTab === 'workout'
-                ? 'text-indigo-400 border-b-2 border-indigo-500'
-                : 'text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            Workout Log
-          </button>
-          <button
-            onClick={() => setActiveTab('diet')}
-            className={`pb-3 px-2 text-sm font-medium transition ${
-              activeTab === 'diet'
-                ? 'text-indigo-400 border-b-2 border-indigo-500'
-                : 'text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            Diet Log
-          </button>
-        </div>
-
-        {(activeTab === 'diet' || (activeTab === 'workout' && (isPlanningPush || workout))) && (
+        {(isPlanningWorkout || workout) && (
           <div className="px-6 py-6">
             <h3 className="text-sm font-semibold text-white">
-              {activeTab === 'diet' ? 'Daily Meals' : 'Log Performed Sets'}
+              Log Performed Sets
             </h3>
           </div>
         )}
 
         {/* Body */}
         <div className="overflow-y-auto flex-1 px-6 pb-6 pt-0 space-y-4 [scrollbar-width:thin] [scrollbar-color:#334155_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-700 [&::-webkit-scrollbar-thumb:hover]:bg-slate-600">
-          {activeTab === 'workout' && (
-            <>
-              {loading ? (
-                <div className="py-10 text-center text-sm text-slate-500">Loading…</div>
-              ) : !isPlanningPush && !workout ? null : !displayedExercises.length ? (
-                <div className="py-10 text-center text-sm text-slate-500">
-                  No exercises logged for this workout.
+          {loading ? (
+            <div className="py-10 text-center text-sm text-slate-500">Loading…</div>
+          ) : !isPlanningWorkout && !workout ? null : !displayedExercises.length ? (
+            <div className="py-10 text-center text-sm text-slate-500">
+              No exercises logged for this workout.
             </div>
           ) : (
             displayedExercises.map((exercise) => (
@@ -483,7 +417,7 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
                                     value={set.weight}
                                     onChange={(e) => {
                                       if (exercise._mode === 'planned') {
-                                        handlePlannedPushSetChange(exercise._exerciseIndex, setIdx, 'weight', e.target.value)
+                                        handlePlannedWorkoutSetChange(exercise._exerciseIndex, setIdx, 'weight', e.target.value)
                                       } else {
                                         handleSetFieldChange(exercise.id, set.id, 'weight', e.target.value)
                                       }
@@ -501,7 +435,7 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
                                   value={set.reps}
                                   onChange={(e) => {
                                     if (exercise._mode === 'planned') {
-                                      handlePlannedPushSetChange(exercise._exerciseIndex, setIdx, 'reps', e.target.value)
+                                      handlePlannedWorkoutSetChange(exercise._exerciseIndex, setIdx, 'reps', e.target.value)
                                     } else {
                                       handleSetFieldChange(exercise.id, set.id, 'reps', e.target.value)
                                     }
@@ -521,54 +455,19 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
                 </div>
               ))
           )}
-            </>
-          )}
-
-          {activeTab === 'diet' && (
-            <div className="space-y-3">
-              <div className="space-y-2">
-                {[
-                  ['meal1', 'Morning Shake'],
-                  ['meal2', 'Breakfast'],
-                  ['meal3', 'Lunch'],
-                  ['meal4', 'Evening Shake'],
-                  ['meal5', 'Dinner'],
-                ].map(([meal, label]) => (
-                  <label key={meal} className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={dietLog[meal]}
-                      onChange={(e) => setDietLog({ ...dietLog, [meal]: e.target.checked })}
-                      className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-indigo-500 focus:ring-indigo-500 cursor-pointer"
-                    />
-                    <span className="text-sm text-slate-300">{label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Footer */}
         <div className="flex gap-3 border-t border-slate-800 p-4">
           <button
-            onClick={handleDeleteLog}
-            disabled={savingWorkoutLog || (activeTab === 'workout' && !detail)}
+            onClick={handleDeleteWorkout}
+            disabled={savingWorkoutLog || !detail}
             className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 transition disabled:opacity-50"
           >
             Delete Log
           </button>
           <div className="ml-auto flex gap-3">
-            {activeTab === 'diet' && (
-              <button
-                onClick={handleSaveDietLog}
-                disabled={savingWorkoutLog}
-                className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition disabled:opacity-50"
-              >
-                {savingWorkoutLog ? 'Saving...' : 'Save Log'}
-              </button>
-            )}
-            {activeTab === 'workout' && (isPlanningPush || workout) && (
+            {(isPlanningWorkout || workout) && (
               <button
                 onClick={handleSaveWorkoutLog}
                 disabled={savingWorkoutLog || loading}
