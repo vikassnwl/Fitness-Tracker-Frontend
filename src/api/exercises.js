@@ -22,3 +22,12 @@ export const deleteExerciseSet = (id) => axiosClient.delete(`/exercise-sets/${id
 
 export const reorderWorkoutExercises = (items) =>
 	axiosClient.post('/workout-exercises/reorder/', items)
+
+export const fetchSplitDayExercises = (split) =>
+	axiosClient.get('/split-day-exercises/', { params: split ? { split } : {} })
+export const createSplitDayExercise = (payload) =>
+	axiosClient.post('/split-day-exercises/', payload)
+export const deleteSplitDayExercise = (id) =>
+	axiosClient.delete(`/split-day-exercises/${id}/`)
+export const reorderSplitDayExercises = (items) =>
+	axiosClient.post('/split-day-exercises/reorder/', items)

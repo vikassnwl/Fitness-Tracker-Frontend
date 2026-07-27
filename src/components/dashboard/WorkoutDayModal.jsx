@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { createWorkout, fetchWorkout, fetchWorkouts, deleteWorkout } from '../../api/workouts'
-import { createExerciseSet, createWorkoutExercise, updateExerciseSet } from '../../api/exercises'
+import {
+  createExerciseSet,
+  createWorkoutExercise,
+  fetchSplitDayExercises,
+  updateExerciseSet,
+} from '../../api/exercises'
 
 const WEEKDAY_SPLIT = {
   1: 'Push',
@@ -11,71 +17,41 @@ const WEEKDAY_SPLIT = {
   6: 'Leg',
 }
 
-const PUSH_SPLIT_EXERCISES = [
-  'Bench Press',
-  'Inclined Chest Press',
-  'Barbell Shoulder Press',
-  'Chest Pec Dec Fly',
-  'Shoulder Side Raises',
-  'Tricep Rope Push Down',
-  'Tricep Overhead Extension',
-]
-
-const PULL_SPLIT_EXERCISES = [
-  'Wide grip lat pull down',
-  'seated cable rows',
-  'single arm dumbbell rows',
-  'T bar rows',
-  'Rear delts',
-  'barbell curls',
-  'hammer curls',
-]
-
-const LEG_SPLIT_EXERCISES = [
-  'barbell squats',
-  'leg press',
-  'walking db lunges',
-  'leg curl',
-  'leg extension',
-  'calf raises',
-]
-
-const SPLIT_EXERCISES = {
-  Push: PUSH_SPLIT_EXERCISES,
-  Pull: PULL_SPLIT_EXERCISES,
-  Leg: LEG_SPLIT_EXERCISES,
-}
-
 const SPLIT_WORKOUT_TYPES = {
   Push: 'push',
   Pull: 'pull',
   Leg: 'legs',
 }
 
-const buildDefaultPlan = (exerciseNames) =>
-  exerciseNames.map((exercise) => ({
-    exercise,
-    sets: [
-      { set_number: 1, weight: '', reps: '' },
-      { set_number: 2, weight: '', reps: '' },
-      { set_number: 3, weight: '', reps: '' },
-    ],
-  }))
+const EMPTY_SETS = () => [
+  { set_number: 1, weight: '', reps: '' },
+  { set_number: 2, weight: '', reps: '' },
+  { set_number: 3, weight: '', reps: '' },
+]
 
-const buildPlanFromWorkout = (workoutDetail, exerciseNames) => {
-  const exercisesByName = new Map(
-    (workoutDetail?.exercises || []).map((exercise) => [
+let plannedIdSeq = 0
+const createPlannedId = () => {
+  plannedIdSeq += 1
+  return `planned-${plannedIdSeq}-${Date.now()}`
+}
+
+const buildPlanFromTemplate = (templateEntries, previousWorkoutDetail) => {
+  const previousByName = new Map(
+    (previousWorkoutDetail?.exercises || []).map((exercise) => [
       (exercise.exercise_name || exercise.custom_name || '').trim().toLowerCase(),
       exercise,
     ])
   )
 
-  return exerciseNames.map((exerciseName) => {
-    const matchedExercise = exercisesByName.get(exerciseName.toLowerCase())
-    const matchedSets = (matchedExercise?.sets || []).slice().sort((a, b) => a.set_number - b.set_number)
+  return templateEntries.map((entry) => {
+    const name = entry.exercise_name || entry.exercise_detail?.name || 'Exercise'
+    const matched = previousByName.get(name.trim().toLowerCase())
+    const matchedSets = (matched?.sets || []).slice().sort((a, b) => a.set_number - b.set_number)
 
     return {
-      exercise: exerciseName,
+      id: createPlannedId(),
+      exercise: name,
+      exerciseId: entry.exercise ?? null,
       sets: [1, 2, 3].map((setNumber, index) => ({
         set_number: setNumber,
         weight: matchedSets[index]?.weight ?? '',
@@ -88,7 +64,7 @@ const buildPlanFromWorkout = (workoutDetail, exerciseNames) => {
 function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
   const [detail, setDetail] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [plannedWorkoutPlan, setPlannedWorkoutPlan] = useState(buildDefaultPlan(PUSH_SPLIT_EXERCISES))
+  const [plannedWorkoutPlan, setPlannedWorkoutPlan] = useState([])
   const [savingWorkoutLog, setSavingWorkoutLog] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
 
@@ -102,49 +78,57 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
     let isCancelled = false
 
     if (!isOpen) {
-      // Reset state when modal closes
       return
     }
 
     if (!workout) {
       setDetail(null)
-      setLoading(false)
+      setPlannedWorkoutPlan([])
       const currentSplit = date ? WEEKDAY_SPLIT[new Date(date + 'T00:00:00').getDay()] : null
       if (currentSplit === 'Push' || currentSplit === 'Pull' || currentSplit === 'Leg') {
-        const loadPreviousSplitValues = async () => {
+        setLoading(true)
+        const loadTemplatePlan = async () => {
           try {
-            const workoutsRes = await fetchWorkouts()
+            const splitKey = SPLIT_WORKOUT_TYPES[currentSplit]
+            const [templateRes, workoutsRes] = await Promise.all([
+              fetchSplitDayExercises(splitKey),
+              fetchWorkouts(),
+            ])
+            const templateList = templateRes.data.results ?? templateRes.data
+            const templateEntries = Array.isArray(templateList)
+              ? [...templateList].sort((a, b) => a.order - b.order)
+              : []
+
             const workouts = workoutsRes.data.results ?? workoutsRes.data
-            const splitWorkoutType = SPLIT_WORKOUT_TYPES[currentSplit]
-            const previousSplitWorkout = workouts
+            const previousSplitWorkout = (Array.isArray(workouts) ? workouts : [])
               .filter(
                 (entry) =>
-                  entry.workout_type === splitWorkoutType && entry.date && entry.date < date
+                  entry.workout_type === splitKey && entry.date && entry.date < date
               )
               .sort((left, right) => right.date.localeCompare(left.date))[0]
 
-            if (!previousSplitWorkout) {
-              if (!isCancelled) {
-                setPlannedWorkoutPlan(buildDefaultPlan(SPLIT_EXERCISES[currentSplit]))
-              }
-              return
+            let previousDetail = null
+            if (previousSplitWorkout) {
+              const previousWorkoutRes = await fetchWorkout(previousSplitWorkout.id)
+              previousDetail = previousWorkoutRes.data
             }
 
-            const previousWorkoutRes = await fetchWorkout(previousSplitWorkout.id)
             if (!isCancelled) {
-              setPlannedWorkoutPlan(
-                buildPlanFromWorkout(previousWorkoutRes.data, SPLIT_EXERCISES[currentSplit])
-              )
+              setPlannedWorkoutPlan(buildPlanFromTemplate(templateEntries, previousDetail))
             }
           } catch (err) {
-            console.error(`Failed to prefill previous ${currentSplit} workout values`, err)
+            console.error(`Failed to load ${currentSplit} template`, err)
             if (!isCancelled) {
-              setPlannedWorkoutPlan(buildDefaultPlan(SPLIT_EXERCISES[currentSplit]))
+              setPlannedWorkoutPlan([])
             }
+          } finally {
+            if (!isCancelled) setLoading(false)
           }
         }
 
-        loadPreviousSplitValues()
+        loadTemplatePlan()
+      } else {
+        setLoading(false)
       }
 
       return () => {
@@ -156,7 +140,9 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
     fetchWorkout(workout.id)
       .then((res) => setDetail(res.data))
       .catch((err) => console.error('Failed to load workout detail', err))
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (!isCancelled) setLoading(false)
+      })
 
     return () => {
       isCancelled = true
@@ -188,7 +174,14 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
   }
 
   const savePlannedWorkoutLog = async () => {
-    if (!date || workout || (plannedSplit !== 'Push' && plannedSplit !== 'Pull' && plannedSplit !== 'Leg')) return
+    if (
+      !date ||
+      workout ||
+      (plannedSplit !== 'Push' && plannedSplit !== 'Pull' && plannedSplit !== 'Leg') ||
+      !plannedWorkoutPlan.length
+    ) {
+      return
+    }
 
     setSavingWorkoutLog(true)
     try {
@@ -204,7 +197,7 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
         const exerciseEntry = plannedWorkoutPlan[exerciseIndex]
         const workoutExerciseRes = await createWorkoutExercise({
           workout: createdWorkout.id,
-          exercise: null,
+          exercise: exerciseEntry.exerciseId ?? null,
           custom_name: exerciseEntry.exercise,
           order: exerciseIndex,
         })
@@ -309,19 +302,24 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
   }
 
   const isPlanningWorkout = !workout && (plannedSplit === 'Push' || plannedSplit === 'Pull' || plannedSplit === 'Leg')
+  const canEditExercises = isPlanningWorkout || Boolean(workout)
+  const interactionsLocked = savingWorkoutLog || loading
+
   const modalTitle = workout
     ? (detail?.name ?? workout.name)
     : (isPlanningWorkout ? `${plannedSplit} Workout` : '')
   const loggedExercises = detail?.exercises ? [...detail.exercises].sort((a, b) => a.order - b.order) : []
   const displayedExercises = isPlanningWorkout
     ? plannedWorkoutPlan.map((entry, entryIndex) => ({
-        id: `planned-${entryIndex}`,
+        id: entry.id,
         exercise_name: entry.exercise,
         sets: entry.sets,
         _mode: 'planned',
         _exerciseIndex: entryIndex,
       }))
     : loggedExercises.map((entry) => ({ ...entry, _mode: 'logged' }))
+
+  const showEmptyTemplateHint = isPlanningWorkout && !loading && !displayedExercises.length
 
   return (
     <div
@@ -358,7 +356,7 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
           </button>
         </div>
 
-        {(isPlanningWorkout || workout) && (
+        {canEditExercises && (
           <div className="px-6 py-6">
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
               Log Performed Sets
@@ -370,90 +368,130 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
         <div className="overflow-y-auto flex-1 px-6 pb-6 pt-0 space-y-4 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent] dark:[scrollbar-color:#334155_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb:hover]:bg-slate-400 dark:[&::-webkit-scrollbar-thumb]:bg-slate-700 dark:[&::-webkit-scrollbar-thumb:hover]:bg-slate-600">
           {loading ? (
             <div className="py-10 text-center text-sm text-slate-500">Loading…</div>
-          ) : !isPlanningWorkout && !workout ? null : !displayedExercises.length ? (
+          ) : !canEditExercises ? null : showEmptyTemplateHint ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-10 text-center dark:border-slate-700">
+              <p className="text-sm text-slate-500">
+                No exercises set for {plannedSplit} day yet.
+              </p>
+              <Link
+                to="/exercises"
+                onClick={onClose}
+                className="mt-3 inline-block text-sm font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
+              >
+                Set up {plannedSplit} exercises
+              </Link>
+            </div>
+          ) : !displayedExercises.length ? (
             <div className="py-10 text-center text-sm text-slate-500">
               No exercises logged for this workout.
             </div>
           ) : (
             displayedExercises.map((exercise) => (
-                <div key={exercise.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
-                  {/* Exercise header */}
-                  <div className="mb-3 flex items-baseline gap-2">
-                    <h3 className="font-semibold text-slate-900 dark:text-white">{exercise.exercise_name ?? exercise.custom_name ?? 'Exercise'}</h3>
-                    {exercise._mode === 'logged' && exercise.muscle_group && (
-                      <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-xs text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">
-                        {exercise.muscle_group}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Sets table */}
-                  {exercise.sets?.length ? (
-                    <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500 dark:border-slate-800">
-                            <th className="px-3 py-2">Set</th>
-                            <th className="px-3 py-2">Weight</th>
-                            <th className="px-3 py-2">Reps</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {exercise.sets.map((set, setIdx) => (
-                            <tr
-                              key={set.id ?? `${exercise.id}-${set.set_number}`}
-                              className={[
-                                'border-b border-slate-200/80 last:border-0 dark:border-slate-800/60',
-                                exercise._mode === 'logged' && set.completed ? 'bg-emerald-50 dark:bg-emerald-950/20' : '',
-                              ].join(' ')}
-                            >
-                              <td className="px-3 py-2 text-slate-500 dark:text-slate-400">{set.set_number}</td>
-                              <td className="px-3 py-2 font-medium text-slate-900 dark:text-white">
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="number"
-                                    step="0.5"
-                                    min="0"
-                                    value={set.weight}
-                                    onChange={(e) => {
-                                      if (exercise._mode === 'planned') {
-                                        handlePlannedWorkoutSetChange(exercise._exerciseIndex, setIdx, 'weight', e.target.value)
-                                      } else {
-                                        handleSetFieldChange(exercise.id, set.id, 'weight', e.target.value)
-                                      }
-                                    }}
-                                    disabled={savingWorkoutLog}
-                                    className="w-20 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                                  />
-                                  <span className="text-xs text-slate-500">kg</span>
-                                </div>
-                              </td>
-                              <td className="px-3 py-2 font-medium text-slate-900 dark:text-white">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={set.reps}
-                                  onChange={(e) => {
-                                    if (exercise._mode === 'planned') {
-                                      handlePlannedWorkoutSetChange(exercise._exerciseIndex, setIdx, 'reps', e.target.value)
-                                    } else {
-                                      handleSetFieldChange(exercise.id, set.id, 'reps', e.target.value)
-                                    }
-                                  }}
-                                  disabled={savingWorkoutLog}
-                                  className="w-20 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                                />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-400 dark:text-slate-600">No sets recorded.</p>
+              <div
+                key={exercise.id}
+                className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950"
+              >
+                <div className="mb-3 flex items-baseline gap-2">
+                  <h3 className="font-semibold text-slate-900 dark:text-white">
+                    {exercise.exercise_name ?? exercise.custom_name ?? 'Exercise'}
+                  </h3>
+                  {exercise._mode === 'logged' && exercise.muscle_group && (
+                    <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-xs text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">
+                      {exercise.muscle_group}
+                    </span>
                   )}
                 </div>
-              ))
+
+                {exercise.sets?.length ? (
+                  <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500 dark:border-slate-800">
+                          <th className="px-3 py-2">Set</th>
+                          <th className="px-3 py-2">Weight</th>
+                          <th className="px-3 py-2">Reps</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {exercise.sets.map((set, setIdx) => (
+                          <tr
+                            key={set.id ?? `${exercise.id}-${set.set_number}`}
+                            className={[
+                              'border-b border-slate-200/80 last:border-0 dark:border-slate-800/60',
+                              exercise._mode === 'logged' && set.completed
+                                ? 'bg-emerald-50 dark:bg-emerald-950/20'
+                                : '',
+                            ].join(' ')}
+                          >
+                            <td className="px-3 py-2 text-slate-500 dark:text-slate-400">
+                              {set.set_number}
+                            </td>
+                            <td className="px-3 py-2 font-medium text-slate-900 dark:text-white">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  min="0"
+                                  value={set.weight}
+                                  onChange={(e) => {
+                                    if (exercise._mode === 'planned') {
+                                      handlePlannedWorkoutSetChange(
+                                        exercise._exerciseIndex,
+                                        setIdx,
+                                        'weight',
+                                        e.target.value
+                                      )
+                                    } else {
+                                      handleSetFieldChange(
+                                        exercise.id,
+                                        set.id,
+                                        'weight',
+                                        e.target.value
+                                      )
+                                    }
+                                  }}
+                                  disabled={interactionsLocked}
+                                  className="w-20 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                                />
+                                <span className="text-xs text-slate-500">kg</span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 font-medium text-slate-900 dark:text-white">
+                              <input
+                                type="number"
+                                min="0"
+                                value={set.reps}
+                                onChange={(e) => {
+                                  if (exercise._mode === 'planned') {
+                                    handlePlannedWorkoutSetChange(
+                                      exercise._exerciseIndex,
+                                      setIdx,
+                                      'reps',
+                                      e.target.value
+                                    )
+                                  } else {
+                                    handleSetFieldChange(
+                                      exercise.id,
+                                      set.id,
+                                      'reps',
+                                      e.target.value
+                                    )
+                                  }
+                                }}
+                                disabled={interactionsLocked}
+                                className="w-20 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 dark:text-slate-600">No sets recorded.</p>
+                )}
+              </div>
+            ))
           )}
         </div>
 
@@ -467,10 +505,14 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
             Delete Log
           </button>
           <div className="ml-auto flex gap-3">
-            {(isPlanningWorkout || workout) && (
+            {canEditExercises && (
               <button
                 onClick={handleSaveWorkoutLog}
-                disabled={savingWorkoutLog || loading}
+                disabled={
+                  interactionsLocked ||
+                  (isPlanningWorkout && !plannedWorkoutPlan.length) ||
+                  (Boolean(workout) && !loggedExercises.length)
+                }
                 className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition disabled:opacity-50"
               >
                 {savingWorkoutLog ? 'Saving...' : 'Save Log'}
