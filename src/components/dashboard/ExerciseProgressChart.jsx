@@ -304,6 +304,7 @@ function ExerciseProgressChart() {
               <Scatter
                 data={chartData}
                 fill="#ffffff"
+                line={{ stroke: '#6366f1', strokeWidth: 2 }}
                 shape={(props) => {
                   const { cx, cy } = props
                   return (
