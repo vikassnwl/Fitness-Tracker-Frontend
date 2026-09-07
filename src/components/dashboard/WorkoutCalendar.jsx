@@ -165,6 +165,7 @@ function WorkoutCalendar({ workouts = [], loading = false, onUpsertWorkout, onRe
         isOpen={Boolean(selectedDate)}
         date={selectedDate}
         workout={selectedWorkout}
+        workouts={workouts}
         onWorkoutCreated={handleWorkoutCreated}
         onClose={() => {
           setSelectedDate(null)

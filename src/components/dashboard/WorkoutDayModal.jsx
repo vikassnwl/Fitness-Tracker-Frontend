@@ -1,12 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { createWorkout, fetchWorkout, fetchWorkouts, deleteWorkout } from '../../api/workouts'
-import {
-  createExerciseSet,
-  createWorkoutExercise,
-  fetchSplitDayExercises,
-  updateExerciseSet,
-} from '../../api/exercises'
+import { createWorkout, fetchWorkout, deleteWorkout, saveWorkoutLog } from '../../api/workouts'
+import { fetchSplitDayExercises } from '../../api/exercises'
 
 const WEEKDAY_SPLIT = {
   1: 'Push',
@@ -61,7 +56,7 @@ const buildPlanFromTemplate = (templateEntries, previousWorkoutDetail) => {
   })
 }
 
-function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
+function WorkoutDayModal({ isOpen, date, workout, workouts = [], onClose, onWorkoutCreated }) {
   const [detail, setDetail] = useState(null)
   const [loading, setLoading] = useState(true)
   const [plannedWorkoutPlan, setPlannedWorkoutPlan] = useState([])
@@ -90,26 +85,22 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
         const loadTemplatePlan = async () => {
           try {
             const splitKey = SPLIT_WORKOUT_TYPES[currentSplit]
-            const [templateRes, workoutsRes] = await Promise.all([
-              fetchSplitDayExercises(splitKey),
-              fetchWorkouts(),
-            ])
+            const templateRes = await fetchSplitDayExercises(splitKey)
             const templateList = templateRes.data.results ?? templateRes.data
             const templateEntries = Array.isArray(templateList)
               ? [...templateList].sort((a, b) => a.order - b.order)
               : []
 
-            const workouts = workoutsRes.data.results ?? workoutsRes.data
-            const previousSplitWorkout = (Array.isArray(workouts) ? workouts : [])
-              .filter(
-                (entry) =>
-                  entry.workout_type === splitKey && entry.date && entry.date < date
-              )
-              .sort((left, right) => right.date.localeCompare(left.date))[0]
+            let previousDetail =
+              (Array.isArray(workouts) ? workouts : [])
+                .filter(
+                  (entry) =>
+                    entry.workout_type === splitKey && entry.date && entry.date < date
+                )
+                .sort((left, right) => right.date.localeCompare(left.date))[0] || null
 
-            let previousDetail = null
-            if (previousSplitWorkout) {
-              const previousWorkoutRes = await fetchWorkout(previousSplitWorkout.id)
+            if (previousDetail && !previousDetail.exercises) {
+              const previousWorkoutRes = await fetchWorkout(previousDetail.id)
               previousDetail = previousWorkoutRes.data
             }
 
@@ -136,9 +127,18 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
       }
     }
 
+    // Prefer already-loaded nested data (list/save response) to avoid extra GET.
+    if (Array.isArray(workout.exercises)) {
+      setDetail(workout)
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     fetchWorkout(workout.id)
-      .then((res) => setDetail(res.data))
+      .then((res) => {
+        if (!isCancelled) setDetail(res.data)
+      })
       .catch((err) => console.error('Failed to load workout detail', err))
       .finally(() => {
         if (!isCancelled) setLoading(false)
@@ -147,7 +147,7 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
     return () => {
       isCancelled = true
     }
-  }, [isOpen, workout, date])
+  }, [isOpen, workout, date, workouts])
 
   if (!isOpen) return null
 
@@ -190,34 +190,22 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
         name: `${plannedSplit} Workout`,
         workout_type: splitWorkoutType,
         date,
-      })
-      const createdWorkout = createdWorkoutRes.data
-
-      for (let exerciseIndex = 0; exerciseIndex < plannedWorkoutPlan.length; exerciseIndex += 1) {
-        const exerciseEntry = plannedWorkoutPlan[exerciseIndex]
-        const workoutExerciseRes = await createWorkoutExercise({
-          workout: createdWorkout.id,
+        exercise_logs: plannedWorkoutPlan.map((exerciseEntry, exerciseIndex) => ({
           exercise: exerciseEntry.exerciseId ?? null,
           custom_name: exerciseEntry.exercise,
           order: exerciseIndex,
-        })
-        const workoutExercise = workoutExerciseRes.data
-
-        for (const setEntry of exerciseEntry.sets) {
-          await createExerciseSet({
-            workout_exercise: workoutExercise.id,
+          sets: exerciseEntry.sets.map((setEntry) => ({
             set_number: setEntry.set_number,
             weight: parseFloat(setEntry.weight) || 0,
             reps: parseInt(setEntry.reps, 10) || 0,
             completed: false,
             notes: '',
-          })
-        }
-      }
-
-      const fullWorkoutRes = await fetchWorkout(createdWorkout.id)
-      setDetail(fullWorkoutRes.data)
-      onWorkoutCreated?.(fullWorkoutRes.data)
+          })),
+        })),
+      })
+      const createdWorkout = createdWorkoutRes.data
+      setDetail(createdWorkout)
+      onWorkoutCreated?.(createdWorkout)
       setToastMessage('Log saved')
     } catch (err) {
       console.error(`Failed to save performed ${plannedSplit} log`, err)
@@ -249,22 +237,17 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
 
     setSavingWorkoutLog(true)
     try {
-      const updateRequests = detail.exercises.flatMap((exercise) =>
-        (exercise.sets || []).map((set) =>
-          updateExerciseSet(set.id, {
-            workout_exercise: exercise.id,
-            set_number: set.set_number,
-            weight: parseFloat(set.weight) || 0,
-            reps: parseInt(set.reps, 10) || 0,
-            completed: Boolean(set.completed),
-            notes: set.notes || '',
-          })
-        )
+      const sets = detail.exercises.flatMap((exercise) =>
+        (exercise.sets || []).map((set) => ({
+          id: set.id,
+          weight: parseFloat(set.weight) || 0,
+          reps: parseInt(set.reps, 10) || 0,
+          completed: Boolean(set.completed),
+          notes: set.notes || '',
+        }))
       )
 
-      await Promise.all(updateRequests)
-
-      const refreshedWorkoutRes = await fetchWorkout(detail.id)
+      const refreshedWorkoutRes = await saveWorkoutLog(detail.id, sets)
       setDetail(refreshedWorkoutRes.data)
       onWorkoutCreated?.(refreshedWorkoutRes.data)
       setToastMessage('Log saved')
