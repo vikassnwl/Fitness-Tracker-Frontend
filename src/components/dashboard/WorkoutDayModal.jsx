@@ -215,11 +215,9 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
         }
       }
 
-      if (onWorkoutCreated) {
-        onWorkoutCreated(createdWorkout)
-      }
       const fullWorkoutRes = await fetchWorkout(createdWorkout.id)
       setDetail(fullWorkoutRes.data)
+      onWorkoutCreated?.(fullWorkoutRes.data)
       setToastMessage('Log saved')
     } catch (err) {
       console.error(`Failed to save performed ${plannedSplit} log`, err)
@@ -268,6 +266,7 @@ function WorkoutDayModal({ isOpen, date, workout, onClose, onWorkoutCreated }) {
 
       const refreshedWorkoutRes = await fetchWorkout(detail.id)
       setDetail(refreshedWorkoutRes.data)
+      onWorkoutCreated?.(refreshedWorkoutRes.data)
       setToastMessage('Log saved')
     } catch (err) {
       console.error('Failed to save existing workout log', err)

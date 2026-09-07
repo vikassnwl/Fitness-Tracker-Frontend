@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-import { fetchWorkouts } from '../../api/workouts'
+import { useMemo, useState } from 'react'
 import WorkoutDayModal from './WorkoutDayModal'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -16,29 +15,20 @@ const WORKOUT_TYPE_COLORS = {
 
 const LEGEND_TYPES = ['push', 'pull', 'legs']
 
-function WorkoutCalendar() {
+function WorkoutCalendar({ workouts = [], loading = false, onUpsertWorkout, onRemoveWorkout }) {
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
-  // Map of "YYYY-MM-DD" -> workout object
-  const [workoutMap, setWorkoutMap] = useState({})
-  const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedWorkout, setSelectedWorkout] = useState(null)
 
-  useEffect(() => {
-    fetchWorkouts()
-      .then((res) => {
-        const list = res.data.results ?? res.data
-        const map = {}
-        list.forEach((w) => {
-          if (w.date) map[w.date] = w
-        })
-        setWorkoutMap(map)
-      })
-      .catch((err) => console.error('Failed to load workouts for calendar', err))
-      .finally(() => setLoading(false))
-  }, [])
+  const workoutMap = useMemo(() => {
+    const map = {}
+    workouts.forEach((workout) => {
+      if (workout.date) map[workout.date] = workout
+    })
+    return map
+  }, [workouts])
 
   // Calendar grid math
   const firstDay = new Date(viewYear, viewMonth, 1).getDay()
@@ -62,8 +52,14 @@ function WorkoutCalendar() {
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
   const handleWorkoutCreated = (createdWorkout) => {
-    if (!createdWorkout?.date) return
-    setWorkoutMap((prev) => ({ ...prev, [createdWorkout.date]: createdWorkout }))
+    if (!createdWorkout) {
+      if (selectedWorkout?.id || selectedDate) {
+        onRemoveWorkout?.(selectedWorkout?.id, selectedDate)
+      }
+      setSelectedWorkout(null)
+      return
+    }
+    onUpsertWorkout?.(createdWorkout)
     setSelectedWorkout(createdWorkout)
   }
 

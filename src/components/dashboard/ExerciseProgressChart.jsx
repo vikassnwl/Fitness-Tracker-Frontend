@@ -9,7 +9,6 @@ import {
   YAxis,
 } from 'recharts'
 import { Info } from 'lucide-react'
-import { fetchWorkouts } from '../../api/workouts'
 import { useTheme } from '../../context/ThemeContext'
 
 const SPLIT_LABELS = {
@@ -98,23 +97,11 @@ function Dropdown({ label, value, options, onChange, disabled = false, labelMap 
   )
 }
 
-function ExerciseProgressChart() {
+function ExerciseProgressChart({ workouts = [], loading = false }) {
   const { isDark } = useTheme()
-  const [workouts, setWorkouts] = useState([])
-  const [loading, setLoading] = useState(true)
   const [selectedSplitKey, setSelectedSplitKey] = useState('push')
   const [selectedExercise, setSelectedExercise] = useState('')
   const [showInfo, setShowInfo] = useState(false)
-
-  useEffect(() => {
-    fetchWorkouts()
-      .then((res) => {
-        const list = res.data.results ?? res.data
-        setWorkouts(list)
-      })
-      .catch((err) => console.error('Failed to load workouts for progress chart', err))
-      .finally(() => setLoading(false))
-  }, [])
 
   const modalWorkouts = useMemo(
     () => workouts.filter((workout) => isCalendarModalWorkout(workout)),
