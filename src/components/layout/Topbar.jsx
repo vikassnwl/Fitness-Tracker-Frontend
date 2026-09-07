@@ -30,6 +30,15 @@ function Topbar() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [menuOpen])
 
+  useEffect(() => {
+    if (!menuOpen) return undefined
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previous
+    }
+  }, [menuOpen])
+
   const handleLogout = async () => {
     setMenuOpen(false)
     await logout()
@@ -42,12 +51,13 @@ function Topbar() {
         <div className="flex items-center gap-3 sm:gap-6">
           <button
             type="button"
-            onClick={() => setMenuOpen((open) => !open)}
+            onClick={() => setMenuOpen(true)}
             className="inline-flex items-center justify-center rounded-lg p-2 text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900 sm:hidden"
-            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-label="Open menu"
             aria-expanded={menuOpen}
+            aria-controls="mobile-nav-drawer"
           >
-            {menuOpen ? <X size={22} /> : <Menu size={22} />}
+            <Menu size={22} />
           </button>
 
           <Link to="/" className="text-xl font-semibold text-slate-900 dark:text-white">
@@ -77,7 +87,7 @@ function Topbar() {
             onClick={toggleTheme}
             className="rounded-full bg-slate-200 px-3 py-2 text-sm font-medium text-slate-900 transition hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
           >
-            {isDark ? 'Light' : 'Dark'}
+            {isDark ? '☀️ Light' : '🌙 Dark'}
           </button>
           {user && (
             <button
@@ -90,15 +100,45 @@ function Topbar() {
         </div>
       </div>
 
-      {menuOpen && (
-        <>
-          <button
-            type="button"
-            className="fixed inset-0 z-40 bg-black/30 sm:hidden"
-            aria-label="Close menu overlay"
-            onClick={() => setMenuOpen(false)}
-          />
-          <nav className="absolute left-0 right-0 top-full z-50 border-b border-slate-200 bg-white px-4 py-3 shadow-lg dark:border-slate-800 dark:bg-slate-950 sm:hidden">
+      {/* Mobile side drawer (Android-style) */}
+      <div className="sm:hidden" aria-hidden={!menuOpen}>
+        <button
+          type="button"
+          className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ${
+            menuOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+          }`}
+          aria-label="Close menu overlay"
+          tabIndex={menuOpen ? 0 : -1}
+          onClick={() => setMenuOpen(false)}
+        />
+
+        <aside
+          id="mobile-nav-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation menu"
+          className={`fixed inset-y-0 left-0 z-50 flex w-[min(20rem,85vw)] flex-col bg-white transition-[transform,box-shadow] duration-300 ease-out dark:bg-slate-950 ${
+            menuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full shadow-none'
+          }`}
+        >
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4 dark:border-slate-800">
+            <div>
+              <p className="text-lg font-semibold text-slate-900 dark:text-white">Fitness Tracker</p>
+              {user && (
+                <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{user.username}</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setMenuOpen(false)}
+              className="inline-flex items-center justify-center rounded-lg p-2 text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900"
+              aria-label="Close menu"
+            >
+              <X size={22} />
+            </button>
+          </div>
+
+          <nav className="flex-1 overflow-y-auto px-3 py-4">
             <div className="space-y-1">
               {NAV_ITEMS.map((item) => (
                 <NavLink
@@ -106,7 +146,7 @@ function Topbar() {
                   to={item.path}
                   end={item.path === '/'}
                   className={({ isActive }) =>
-                    `block rounded-xl px-4 py-3 text-sm font-medium transition ${
+                    `block rounded-xl px-4 py-3 text-base font-medium transition ${
                       isActive
                         ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white'
                         : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900'
@@ -116,19 +156,22 @@ function Topbar() {
                   {item.label}
                 </NavLink>
               ))}
-              {user && (
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="mt-2 w-full rounded-xl px-4 py-3 text-left text-sm font-medium text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
-                >
-                  Log out
-                </button>
-              )}
             </div>
           </nav>
-        </>
-      )}
+
+          {user && (
+            <div className="border-t border-slate-200 p-3 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full rounded-xl px-4 py-3 text-left text-base font-medium text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+              >
+                Log out
+              </button>
+            </div>
+          )}
+        </aside>
+      </div>
     </header>
   )
 }

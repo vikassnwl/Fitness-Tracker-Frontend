@@ -309,7 +309,7 @@ function ExerciseProgressChart({ workouts = [], loading = false }) {
             </ScatterChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-500">
+          <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white px-4 text-center text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-500">
             Log more workouts for this exercise to see progress.
           </div>
         )}

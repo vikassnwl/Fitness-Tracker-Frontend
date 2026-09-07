@@ -23,6 +23,11 @@ function NotesPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  const openNote = (note) => {
+    setSelectedNote(note)
+    setModalOpen(true)
+  }
+
   if (loading) return <LoadingSpinner />
 
   return (
@@ -37,32 +42,37 @@ function NotesPage() {
       <div className="space-y-3">
         {notes.length ? (
           notes.map((note) => (
-            <button
+            <div
               key={note.id}
-              type="button"
-              onClick={() => {
-                setSelectedNote(note)
-                setModalOpen(true)
+              role="button"
+              tabIndex={0}
+              onClick={() => openNote(note)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  openNote(note)
+                }
               }}
-              className="w-full rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
+              className="w-full cursor-pointer rounded-3xl border border-slate-200 bg-white p-6 text-left shadow-sm transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                <p className="text-sm text-slate-500 dark:text-slate-400">
                   {new Date(note.date + 'T00:00:00').toLocaleDateString('default', {
-                    weekday: 'short',
+                    weekday: 'long',
                     year: 'numeric',
-                    month: 'short',
+                    month: 'long',
                     day: 'numeric',
                   })}
-                </h3>
-                <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                </p>
+                <span className="inline-flex rounded-full bg-amber-100 px-4 py-1.5 text-base font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-200">
                   {reasonLabel(note.reason)}
                 </span>
               </div>
-              <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+
+              <p className="mt-4 line-clamp-3 text-base leading-relaxed text-slate-600 dark:text-slate-300">
                 {note.note?.trim() || 'No extra details.'}
               </p>
-            </button>
+            </div>
           ))
         ) : (
           <EmptyState message="No skip notes yet. When you skip a day, add a note from the calendar so you remember why." />
@@ -73,6 +83,7 @@ function NotesPage() {
         isOpen={modalOpen}
         date={selectedNote?.date}
         note={selectedNote}
+        initialMode="view"
         onClose={() => {
           setModalOpen(false)
           setSelectedNote(null)
