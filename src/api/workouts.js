@@ -1,6 +1,7 @@
 import axiosClient from './axiosClient'
 
-export const fetchWorkouts = () => axiosClient.get('/workouts/')
+export const fetchWorkouts = (params = {}) =>
+  axiosClient.get('/workouts/', { params })
 export const fetchWorkout = (id) => axiosClient.get(`/workouts/${id}/`)
 export const createWorkout = (payload) => axiosClient.post('/workouts/', payload)
 export const updateWorkout = (id, payload) => axiosClient.put(`/workouts/${id}/`, payload)

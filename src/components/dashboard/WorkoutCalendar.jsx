@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import WorkoutDayModal from './WorkoutDayModal'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -15,12 +15,22 @@ const WORKOUT_TYPE_COLORS = {
 
 const LEGEND_TYPES = ['push', 'pull', 'legs']
 
-function WorkoutCalendar({ workouts = [], loading = false, onUpsertWorkout, onRemoveWorkout }) {
+function WorkoutCalendar({
+  workouts = [],
+  loading = false,
+  onUpsertWorkout,
+  onRemoveWorkout,
+  onViewMonthChange,
+}) {
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedWorkout, setSelectedWorkout] = useState(null)
+
+  useEffect(() => {
+    onViewMonthChange?.(viewYear, viewMonth)
+  }, [viewYear, viewMonth, onViewMonthChange])
 
   const workoutMap = useMemo(() => {
     const map = {}
