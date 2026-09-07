@@ -61,6 +61,7 @@ function WorkoutDayModal({ isOpen, date, workout, workouts = [], onClose, onWork
   const [loading, setLoading] = useState(true)
   const [plannedWorkoutPlan, setPlannedWorkoutPlan] = useState([])
   const [savingWorkoutLog, setSavingWorkoutLog] = useState(false)
+  const [deletingWorkoutLog, setDeletingWorkoutLog] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
 
   useEffect(() => {
@@ -271,7 +272,7 @@ function WorkoutDayModal({ isOpen, date, workout, workouts = [], onClose, onWork
     if (!detail?.id) return
     if (!confirm('Delete this workout log?')) return
 
-    setSavingWorkoutLog(true)
+    setDeletingWorkoutLog(true)
     try {
       await deleteWorkout(detail.id)
       onWorkoutCreated?.(null)
@@ -279,13 +280,13 @@ function WorkoutDayModal({ isOpen, date, workout, workouts = [], onClose, onWork
     } catch (err) {
       console.error('Failed to delete workout', err)
     } finally {
-      setSavingWorkoutLog(false)
+      setDeletingWorkoutLog(false)
     }
   }
 
   const isPlanningWorkout = !workout && (plannedSplit === 'Push' || plannedSplit === 'Pull' || plannedSplit === 'Leg')
   const canEditExercises = isPlanningWorkout || Boolean(workout)
-  const interactionsLocked = savingWorkoutLog || loading
+  const interactionsLocked = savingWorkoutLog || deletingWorkoutLog || loading
 
   const modalTitle = workout
     ? (detail?.name ?? workout.name)
@@ -481,10 +482,10 @@ function WorkoutDayModal({ isOpen, date, workout, workouts = [], onClose, onWork
         <div className="flex gap-3 border-t border-slate-200 p-4 dark:border-slate-800">
           <button
             onClick={handleDeleteWorkout}
-            disabled={savingWorkoutLog || !detail}
+            disabled={interactionsLocked || !detail}
             className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 transition disabled:opacity-50"
           >
-            Delete Log
+            {deletingWorkoutLog ? 'Deleting...' : 'Delete Log'}
           </button>
           <div className="ml-auto flex gap-3">
             {canEditExercises && (

@@ -4,6 +4,7 @@ const sections = [
   { label: 'Dashboard', path: '/' },
   { label: 'Workouts', path: '/workouts' },
   { label: 'Exercises', path: '/exercises' },
+  { label: 'Notes', path: '/notes' },
   { label: 'Diet', path: '/diet' },
   { label: 'Body Progress', path: '/body-progress' },
   { label: 'Analytics', path: '/analytics' },

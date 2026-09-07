@@ -9,6 +9,7 @@ import DietPage from '../pages/DietPage'
 import BodyProgressPage from '../pages/BodyProgressPage'
 import AnalyticsPage from '../pages/AnalyticsPage'
 import SettingsPage from '../pages/SettingsPage'
+import NotesPage from '../pages/NotesPage'
 import LoginPage from '../pages/LoginPage'
 
 function AppRoutes() {
@@ -76,6 +77,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <AnalyticsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/notes"
+        element={
+          <ProtectedRoute>
+            <NotesPage />
           </ProtectedRoute>
         }
       />

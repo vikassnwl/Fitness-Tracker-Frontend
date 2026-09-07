@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchWorkouts } from '../api/workouts'
+import { fetchDayNotes } from '../api/dayNotes'
 import WorkoutCalendar from '../components/dashboard/WorkoutCalendar'
 import ExerciseProgressChart from '../components/dashboard/ExerciseProgressChart'
 
@@ -15,6 +16,7 @@ const monthDateRange = (year, month) => {
 function DashboardPage() {
   const today = new Date()
   const [workouts, setWorkouts] = useState([])
+  const [dayNotes, setDayNotes] = useState([])
   const [loading, setLoading] = useState(true)
   const fetchedMonthsRef = useRef(new Set())
 
@@ -23,6 +25,16 @@ function DashboardPage() {
       const byId = new Map(prev.map((workout) => [workout.id, workout]))
       incoming.forEach((workout) => {
         byId.set(workout.id, workout)
+      })
+      return Array.from(byId.values())
+    })
+  }, [])
+
+  const mergeDayNotes = useCallback((incoming) => {
+    setDayNotes((prev) => {
+      const byId = new Map(prev.map((note) => [note.id, note]))
+      incoming.forEach((note) => {
+        byId.set(note.id, note)
       })
       return Array.from(byId.values())
     })
@@ -40,17 +52,23 @@ function DashboardPage() {
       if (isInitial) setLoading(true)
 
       try {
-        const res = await fetchWorkouts(monthDateRange(year, month))
-        const list = res.data.results ?? res.data
-        mergeWorkouts(Array.isArray(list) ? list : [])
+        const range = monthDateRange(year, month)
+        const [workoutsRes, notesRes] = await Promise.all([
+          fetchWorkouts(range),
+          fetchDayNotes(range),
+        ])
+        const workoutList = workoutsRes.data.results ?? workoutsRes.data
+        const noteList = notesRes.data.results ?? notesRes.data
+        mergeWorkouts(Array.isArray(workoutList) ? workoutList : [])
+        mergeDayNotes(Array.isArray(noteList) ? noteList : [])
       } catch (err) {
         fetchedMonthsRef.current.delete(key)
-        console.error('Failed to load workouts for month', err)
+        console.error('Failed to load calendar month data', err)
       } finally {
         if (isInitial) setLoading(false)
       }
     },
-    [mergeWorkouts]
+    [mergeWorkouts, mergeDayNotes]
   )
 
   useEffect(() => {
@@ -77,13 +95,36 @@ function DashboardPage() {
     )
   }
 
+  const upsertDayNote = (note) => {
+    if (!note) return
+    setDayNotes((prev) => {
+      const without = prev.filter(
+        (item) => item.id !== note.id && item.date !== note.date
+      )
+      return [...without, note]
+    })
+    if (note.date) {
+      const [y, m] = note.date.split('-').map(Number)
+      fetchedMonthsRef.current.add(monthKey(y, m - 1))
+    }
+  }
+
+  const removeDayNote = (noteId, date) => {
+    setDayNotes((prev) =>
+      prev.filter((item) => item.id !== noteId && item.date !== date)
+    )
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
       <WorkoutCalendar
         workouts={workouts}
+        dayNotes={dayNotes}
         loading={loading}
         onUpsertWorkout={upsertWorkout}
         onRemoveWorkout={removeWorkout}
+        onUpsertDayNote={upsertDayNote}
+        onRemoveDayNote={removeDayNote}
         onViewMonthChange={ensureMonthLoaded}
       />
       <ExerciseProgressChart workouts={workouts} loading={loading} />
