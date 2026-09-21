@@ -1,9 +1,6 @@
-import { Routes, Route } from 'react-router-dom'
+import { Navigate, Routes, Route } from 'react-router-dom'
 import ProtectedRoute from '../components/ProtectedRoute'
 import DashboardPage from '../pages/DashboardPage'
-import WorkoutsPage from '../pages/WorkoutsPage'
-import WorkoutDetailPage from '../pages/WorkoutDetailPage'
-import NewWorkoutPage from '../pages/NewWorkoutPage'
 import ExerciseLibraryPage from '../pages/ExerciseLibraryPage'
 import DietPage from '../pages/DietPage'
 import BodyProgressPage from '../pages/BodyProgressPage'
@@ -21,30 +18,6 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <DashboardPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/workouts"
-        element={
-          <ProtectedRoute>
-            <WorkoutsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/workouts/new"
-        element={
-          <ProtectedRoute>
-            <NewWorkoutPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/workouts/:id"
-        element={
-          <ProtectedRoute>
-            <WorkoutDetailPage />
           </ProtectedRoute>
         }
       />
@@ -96,6 +69,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }

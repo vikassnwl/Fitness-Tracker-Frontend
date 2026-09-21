@@ -10,6 +10,22 @@ const NAV_ITEMS = [
   { label: 'Notes', path: '/notes' },
 ]
 
+const navClassName = ({ isActive }) =>
+  [
+    'rounded-lg px-3 py-1.5 text-sm font-medium transition',
+    isActive
+      ? 'bg-indigo-600 text-white shadow-sm dark:bg-indigo-500'
+      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-white',
+  ].join(' ')
+
+const mobileNavClassName = ({ isActive }) =>
+  [
+    'block rounded-xl px-4 py-3 text-base font-medium transition',
+    isActive
+      ? 'bg-indigo-600 text-white dark:bg-indigo-500'
+      : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900',
+  ].join(' ')
+
 function Topbar() {
   const { isDark, toggleTheme } = useTheme()
   const { user, logout } = useAuth()
@@ -66,13 +82,14 @@ function Topbar() {
 
           <nav className="hidden items-center gap-1 sm:flex">
             {NAV_ITEMS.map((item) => (
-              <Link
+              <NavLink
                 key={item.path}
                 to={item.path}
-                className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-white"
+                end={item.path === '/'}
+                className={navClassName}
               >
                 {item.label}
-              </Link>
+              </NavLink>
             ))}
           </nav>
         </div>
@@ -145,13 +162,7 @@ function Topbar() {
                   key={item.path}
                   to={item.path}
                   end={item.path === '/'}
-                  className={({ isActive }) =>
-                    `block rounded-xl px-4 py-3 text-base font-medium transition ${
-                      isActive
-                        ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white'
-                        : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900'
-                    }`
-                  }
+                  className={mobileNavClassName}
                 >
                   {item.label}
                 </NavLink>

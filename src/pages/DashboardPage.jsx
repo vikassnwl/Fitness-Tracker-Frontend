@@ -18,6 +18,7 @@ function DashboardPage() {
   const [workouts, setWorkouts] = useState([])
   const [dayNotes, setDayNotes] = useState([])
   const [loading, setLoading] = useState(true)
+  const [progressEpoch, setProgressEpoch] = useState(0)
   const fetchedMonthsRef = useRef(new Set())
 
   const mergeWorkouts = useCallback((incoming) => {
@@ -54,7 +55,7 @@ function DashboardPage() {
       try {
         const range = monthDateRange(year, month)
         const [workoutsRes, notesRes] = await Promise.all([
-          fetchWorkouts(range),
+          fetchWorkouts({ ...range, compact: 1 }),
           fetchDayNotes(range),
         ])
         const workoutList = workoutsRes.data.results ?? workoutsRes.data
@@ -75,6 +76,8 @@ function DashboardPage() {
     ensureMonthLoaded(today.getFullYear(), today.getMonth(), { isInitial: true })
   }, [ensureMonthLoaded])
 
+  const bumpProgress = () => setProgressEpoch((value) => value + 1)
+
   const upsertWorkout = (workout) => {
     if (!workout) return
     setWorkouts((prev) => {
@@ -83,16 +86,14 @@ function DashboardPage() {
       )
       return [...without, workout]
     })
-    if (workout.date) {
-      const [y, m] = workout.date.split('-').map(Number)
-      fetchedMonthsRef.current.add(monthKey(y, m - 1))
-    }
+    bumpProgress()
   }
 
   const removeWorkout = (workoutId, date) => {
     setWorkouts((prev) =>
       prev.filter((item) => item.id !== workoutId && item.date !== date)
     )
+    bumpProgress()
   }
 
   const upsertDayNote = (note) => {
@@ -103,10 +104,6 @@ function DashboardPage() {
       )
       return [...without, note]
     })
-    if (note.date) {
-      const [y, m] = note.date.split('-').map(Number)
-      fetchedMonthsRef.current.add(monthKey(y, m - 1))
-    }
   }
 
   const removeDayNote = (noteId, date) => {
@@ -127,7 +124,7 @@ function DashboardPage() {
         onRemoveDayNote={removeDayNote}
         onViewMonthChange={ensureMonthLoaded}
       />
-      <ExerciseProgressChart workouts={workouts} loading={loading} />
+      <ExerciseProgressChart progressEpoch={progressEpoch} />
     </div>
   )
 }

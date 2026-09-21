@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import WorkoutDayModal from './WorkoutDayModal'
-import DayActionChooser from './DayActionChooser'
 import DayNoteModal from './DayNoteModal'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -24,7 +23,6 @@ function WorkoutCalendar({
   onUpsertWorkout,
   onRemoveWorkout,
   onUpsertDayNote,
-  onRemoveDayNote,
   onViewMonthChange,
 }) {
   const today = new Date()
@@ -32,8 +30,8 @@ function WorkoutCalendar({
   const [viewMonth, setViewMonth] = useState(today.getMonth())
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedWorkout, setSelectedWorkout] = useState(null)
-  const [selectedNote, setSelectedNote] = useState(null)
-  const [panel, setPanel] = useState(null) // 'chooser' | 'workout' | 'note'
+  const [panel, setPanel] = useState(null) // 'workout'
+  const [rangeModalOpen, setRangeModalOpen] = useState(false)
 
   useEffect(() => {
     onViewMonthChange?.(viewYear, viewMonth)
@@ -78,24 +76,15 @@ function WorkoutCalendar({
   const closePanels = () => {
     setSelectedDate(null)
     setSelectedWorkout(null)
-    setSelectedNote(null)
     setPanel(null)
+    setRangeModalOpen(false)
   }
 
   const handleDayClick = (dateStr) => {
-    const workout = workoutMap[dateStr] || null
-    const note = noteMap[dateStr] || null
     setSelectedDate(dateStr)
-    setSelectedWorkout(workout)
-    setSelectedNote(note)
-
-    if (workout) {
-      setPanel('workout')
-    } else if (note) {
-      setPanel('note')
-    } else {
-      setPanel('chooser')
-    }
+    setSelectedWorkout(workoutMap[dateStr] || null)
+    setRangeModalOpen(false)
+    setPanel('workout')
   }
 
   const handleWorkoutCreated = (createdWorkout) => {
@@ -112,7 +101,7 @@ function WorkoutCalendar({
 
   return (
     <div className="flex h-full flex-col rounded-3xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-      <div className="mb-5 flex items-center justify-between">
+      <div className="mb-5 flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Workout Calendar</h2>
         <div className="flex items-center gap-2">
           <button
@@ -206,26 +195,28 @@ function WorkoutCalendar({
         )}
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
+      <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2">
         {LEGEND_TYPES.map((type) => (
           <div key={type} className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-500">
             <span className={`h-2 w-2 rounded-full ${WORKOUT_TYPE_COLORS[type]}`} />
             {type.charAt(0).toUpperCase() + type.slice(1)}
           </div>
         ))}
-        <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-500">
+        <button
+          type="button"
+          onClick={() => {
+            setPanel(null)
+            setSelectedDate(null)
+            setSelectedWorkout(null)
+            setRangeModalOpen(true)
+          }}
+          aria-label="Add skip notes"
+          className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-slate-600 underline decoration-slate-400 decoration-dotted underline-offset-4 dark:text-slate-500 dark:decoration-slate-500"
+        >
           <span className="h-2 w-2 rounded-full bg-amber-400" />
           Skip note
-        </div>
+        </button>
       </div>
-
-      <DayActionChooser
-        isOpen={panel === 'chooser'}
-        date={selectedDate}
-        onClose={closePanels}
-        onLogWorkout={() => setPanel('workout')}
-        onAddSkipNote={() => setPanel('note')}
-      />
 
       <WorkoutDayModal
         isOpen={panel === 'workout'}
@@ -237,17 +228,13 @@ function WorkoutCalendar({
       />
 
       <DayNoteModal
-        isOpen={panel === 'note'}
-        date={selectedDate}
-        note={selectedNote}
-        onClose={closePanels}
+        isOpen={rangeModalOpen}
+        enableRange
+        onClose={() => setRangeModalOpen(false)}
         onSaved={(saved) => {
-          onUpsertDayNote?.(saved)
-          setSelectedNote(saved)
-        }}
-        onDeleted={(deleted) => {
-          onRemoveDayNote?.(deleted.id, deleted.date)
-          setSelectedNote(null)
+          const items = Array.isArray(saved) ? saved : [saved]
+          items.forEach((item) => onUpsertDayNote?.(item))
+          setRangeModalOpen(false)
         }}
       />
     </div>

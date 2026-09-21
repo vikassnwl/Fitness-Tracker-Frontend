@@ -6,6 +6,9 @@ export const fetchDayNotes = (params = {}) =>
 export const createDayNote = (payload) =>
   axiosClient.post('/day-notes/', payload)
 
+export const createDayNotesRange = (payload) =>
+  axiosClient.post('/day-notes/range/', payload)
+
 export const updateDayNote = (id, payload) =>
   axiosClient.put(`/day-notes/${id}/`, payload)
 

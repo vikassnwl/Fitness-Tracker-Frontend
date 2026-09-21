@@ -18,12 +18,6 @@ const SPLIT_WORKOUT_TYPES = {
   Leg: 'legs',
 }
 
-const EMPTY_SETS = () => [
-  { set_number: 1, weight: '', reps: '' },
-  { set_number: 2, weight: '', reps: '' },
-  { set_number: 3, weight: '', reps: '' },
-]
-
 let plannedIdSeq = 0
 const createPlannedId = () => {
   plannedIdSeq += 1
@@ -128,14 +122,13 @@ function WorkoutDayModal({ isOpen, date, workout, workouts = [], onClose, onWork
       }
     }
 
-    // Prefer already-loaded nested data (list/save response) to avoid extra GET.
     if (Array.isArray(workout.exercises)) {
       setDetail(workout)
       setLoading(false)
-      return
+    } else {
+      setLoading(true)
     }
 
-    setLoading(true)
     fetchWorkout(workout.id)
       .then((res) => {
         if (!isCancelled) setDetail(res.data)

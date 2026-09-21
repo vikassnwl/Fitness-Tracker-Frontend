@@ -2,6 +2,10 @@ import axiosClient from './axiosClient'
 
 export const fetchWorkouts = (params = {}) =>
   axiosClient.get('/workouts/', { params })
+export const fetchExerciseProgress = ({ workoutType, exercise }) =>
+  axiosClient.get('/workouts/progress/', {
+    params: { workout_type: workoutType, exercise },
+  })
 export const fetchWorkout = (id) => axiosClient.get(`/workouts/${id}/`)
 export const createWorkout = (payload) => axiosClient.post('/workouts/', payload)
 export const updateWorkout = (id, payload) => axiosClient.put(`/workouts/${id}/`, payload)

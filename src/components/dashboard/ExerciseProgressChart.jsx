@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   CartesianGrid,
   ResponsiveContainer,
@@ -10,60 +10,16 @@ import {
 } from 'recharts'
 import { Info } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
+import { fetchExerciseProgress } from '../../api/workouts'
+import { fetchSplitDayExercises } from '../../api/exercises'
 
 const SPLIT_LABELS = {
   push: 'Push',
   pull: 'Pull',
   legs: 'Leg',
-  upper: 'Upper',
-  lower: 'Lower',
-  full: 'Full Body',
-  custom: 'Custom',
 }
 
-const CALENDAR_MODAL_SPLITS = {
-  push: {
-    workoutName: 'Push Workout',
-    exercises: [
-      'Bench Press',
-      'Inclined Chest Press',
-      'Barbell Shoulder Press',
-      'Chest Pec Dec Fly',
-      'Shoulder Side Raises',
-      'Tricep Rope Push Down',
-      'Tricep Overhead Extension',
-    ],
-  },
-  pull: {
-    workoutName: 'Pull Workout',
-    exercises: [
-      'Wide grip lat pull down',
-      'seated cable rows',
-      'single arm dumbbell rows',
-      'T bar rows',
-      'Rear delts',
-      'barbell curls',
-      'hammer curls',
-    ],
-  },
-  legs: {
-    workoutName: 'Leg Workout',
-    exercises: [
-      'barbell squats',
-      'leg press',
-      'walking db lunges',
-      'leg curl',
-      'leg extension',
-      'calf raises',
-    ],
-  },
-}
-
-const isCalendarModalWorkout = (workout) => {
-  const config = CALENDAR_MODAL_SPLITS[workout.workout_type]
-  if (!config) return false
-  return workout.name === config.workoutName
-}
+const SPLIT_OPTIONS = ['push', 'pull', 'legs']
 
 function Dropdown({ label, value, options, onChange, disabled = false, labelMap = {} }) {
   return (
@@ -97,33 +53,57 @@ function Dropdown({ label, value, options, onChange, disabled = false, labelMap 
   )
 }
 
-function ExerciseProgressChart({ workouts = [], loading = false }) {
+function ExerciseProgressChart({ progressEpoch = 0 }) {
   const { isDark } = useTheme()
   const [selectedSplitKey, setSelectedSplitKey] = useState('push')
   const [selectedExercise, setSelectedExercise] = useState('')
   const [showInfo, setShowInfo] = useState(false)
-
-  const modalWorkouts = useMemo(
-    () => workouts.filter((workout) => isCalendarModalWorkout(workout)),
-    [workouts]
+  const [chartData, setChartData] = useState([])
+  const [chartLoading, setChartLoading] = useState(false)
+  const [exerciseOptions, setExerciseOptions] = useState([])
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches
   )
+  const cacheRef = useRef(new Map())
 
-  const splitOptions = useMemo(() => {
-    const foundSplits = Array.from(
-      new Set(modalWorkouts.map((workout) => workout.workout_type).filter(Boolean))
-    )
-    return foundSplits
-      .sort((left, right) =>
-        (SPLIT_LABELS[left] ?? left).localeCompare(SPLIT_LABELS[right] ?? right)
-      )
-      .reverse()
-  }, [modalWorkouts])
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 639px)')
+    const onChange = () => setIsMobile(media.matches)
+    onChange()
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [])
 
-  const exerciseOptions = useMemo(() => {
-    const config = CALENDAR_MODAL_SPLITS[selectedSplitKey]
-    if (!config) return []
+  const splitOptions = SPLIT_OPTIONS
 
-    return config.exercises
+  useEffect(() => {
+    cacheRef.current.clear()
+  }, [progressEpoch])
+
+  useEffect(() => {
+    if (!selectedSplitKey) {
+      setExerciseOptions([])
+      return undefined
+    }
+
+    let cancelled = false
+    fetchSplitDayExercises(selectedSplitKey)
+      .then((res) => {
+        const list = res.data.results ?? res.data
+        const names = (Array.isArray(list) ? [...list] : [])
+          .sort((left, right) => (left.order ?? 0) - (right.order ?? 0))
+          .map((entry) => (entry.exercise_name || entry.exercise_detail?.name || '').trim())
+          .filter(Boolean)
+        if (!cancelled) setExerciseOptions(names)
+      })
+      .catch((err) => {
+        console.error('Failed to load split exercises', err)
+        if (!cancelled) setExerciseOptions([])
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [selectedSplitKey])
 
   useEffect(() => {
@@ -148,43 +128,45 @@ function ExerciseProgressChart({ workouts = [], loading = false }) {
     }
   }, [exerciseOptions, selectedExercise])
 
-  const chartData = useMemo(() => {
-    if (!selectedSplitKey || !selectedExercise) {
-      return []
+  useEffect(() => {
+    if (
+      !selectedSplitKey ||
+      !selectedExercise ||
+      !exerciseOptions.includes(selectedExercise)
+    ) {
+      setChartData([])
+      setChartLoading(false)
+      return undefined
     }
 
-    return workouts
-      .filter(
-        (workout) =>
-          isCalendarModalWorkout(workout) &&
-          workout.workout_type === selectedSplitKey &&
-          workout.date
-      )
-      .map((workout) => {
-        const matchingExercise = (workout.exercises || []).find((exercise) => {
-          const name = (exercise.exercise_name || exercise.custom_name || '').trim()
-          return name === selectedExercise
-        })
+    const cacheKey = `${selectedSplitKey}::${selectedExercise}`
+    const cached = cacheRef.current.get(cacheKey)
+    if (cached) {
+      setChartData(cached)
+      setChartLoading(false)
+      return undefined
+    }
 
-        if (!matchingExercise || !matchingExercise.sets?.length) {
-          return null
-        }
-
-        const orderedSets = [...matchingExercise.sets].sort((left, right) => left.set_number - right.set_number)
-        const heaviestSet = orderedSets.find((s) => s.set_number === 3) ?? orderedSets[orderedSets.length - 1]
-
-        const w = Number(heaviestSet?.weight) || 0
-        const r = Number(heaviestSet?.reps) || 0
-        return {
-          date: workout.date,
-          score: parseFloat((w * (1 + r / 100)).toFixed(2)),
-          weight: w,
-          reps: r,
-        }
+    let cancelled = false
+    setChartLoading(true)
+    fetchExerciseProgress({ workoutType: selectedSplitKey, exercise: selectedExercise })
+      .then((res) => {
+        const points = Array.isArray(res.data.points) ? res.data.points : []
+        cacheRef.current.set(cacheKey, points)
+        if (!cancelled) setChartData(points)
       })
-      .filter(Boolean)
-      .sort((left, right) => left.date.localeCompare(right.date))
-  }, [selectedExercise, selectedSplitKey, workouts])
+      .catch((err) => {
+        console.error('Failed to load exercise progress', err)
+        if (!cancelled) setChartData([])
+      })
+      .finally(() => {
+        if (!cancelled) setChartLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [exerciseOptions, selectedExercise, selectedSplitKey, progressEpoch])
 
   return (
     <section className="h-full rounded-3xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
@@ -237,7 +219,7 @@ function ExerciseProgressChart({ workouts = [], loading = false }) {
 
       {/* Chart */}
       <div style={{ width: '100%', height: 380 }}>
-        {loading ? (
+        {chartLoading ? (
           <div className="flex h-full items-center justify-center text-sm text-slate-600 dark:text-slate-500">
             Loading progress…
           </div>
@@ -298,10 +280,10 @@ function ExerciseProgressChart({ workouts = [], loading = false }) {
                     <circle
                       cx={cx}
                       cy={cy}
-                      r={7}
+                      r={isMobile ? 3.5 : 7}
                       fill="white"
                       stroke="#6366f1"
-                      strokeWidth={3}
+                      strokeWidth={isMobile ? 1.75 : 3}
                     />
                   )
                 }}

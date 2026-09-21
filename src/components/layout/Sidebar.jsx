@@ -2,7 +2,6 @@ import { NavLink } from 'react-router-dom'
 
 const sections = [
   { label: 'Dashboard', path: '/' },
-  { label: 'Workouts', path: '/workouts' },
   { label: 'Exercises', path: '/exercises' },
   { label: 'Notes', path: '/notes' },
   { label: 'Diet', path: '/diet' },

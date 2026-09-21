@@ -7,6 +7,15 @@ import EmptyState from '../components/ui/EmptyState'
 const reasonLabel = (value) =>
   DAY_NOTE_REASONS.find((item) => item.value === value)?.label || value
 
+const mergeNotes = (prev, incoming) => {
+  const items = Array.isArray(incoming) ? incoming : [incoming]
+  const byDate = new Map(prev.map((item) => [item.date, item]))
+  items.forEach((item) => {
+    if (item?.date) byDate.set(item.date, item)
+  })
+  return Array.from(byDate.values()).sort((a, b) => b.date.localeCompare(a.date))
+}
+
 function NotesPage() {
   const [notes, setNotes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -26,6 +35,11 @@ function NotesPage() {
   const openNote = (note) => {
     setSelectedNote(note)
     setModalOpen(true)
+  }
+
+  const closeModal = () => {
+    setModalOpen(false)
+    setSelectedNote(null)
   }
 
   if (loading) return <LoadingSpinner />
@@ -75,24 +89,19 @@ function NotesPage() {
             </div>
           ))
         ) : (
-          <EmptyState message="No skip notes yet. When you skip a day, add a note from the calendar so you remember why." />
+          <EmptyState message="No skip notes yet. Tap Skip note on the calendar to add a day or a date range." />
         )}
       </div>
 
       <DayNoteModal
         isOpen={modalOpen}
+        enableRange={false}
         date={selectedNote?.date}
         note={selectedNote}
         initialMode="view"
-        onClose={() => {
-          setModalOpen(false)
-          setSelectedNote(null)
-        }}
+        onClose={closeModal}
         onSaved={(saved) => {
-          setNotes((prev) => {
-            const without = prev.filter((item) => item.id !== saved.id && item.date !== saved.date)
-            return [saved, ...without].sort((a, b) => b.date.localeCompare(a.date))
-          })
+          setNotes((prev) => mergeNotes(prev, saved))
         }}
         onDeleted={(deleted) => {
           setNotes((prev) => prev.filter((item) => item.id !== deleted.id))

@@ -1,14 +1,28 @@
 import { useEffect, useRef, useState } from 'react'
 import { Pencil, Trash2 } from 'lucide-react'
-import { createDayNote, updateDayNote, deleteDayNote, DAY_NOTE_REASONS } from '../../api/dayNotes'
+import { createDayNote, createDayNotesRange, updateDayNote, deleteDayNote, DAY_NOTE_REASONS } from '../../api/dayNotes'
 
 const reasonLabel = (value) =>
   DAY_NOTE_REASONS.find((item) => item.value === value)?.label || value
 
-function DayNoteModal({ isOpen, date, note, initialMode, onClose, onSaved, onDeleted }) {
+const todayIso = () => new Date().toISOString().slice(0, 10)
+
+const formatNoteDate = (value) =>
+  value
+    ? new Date(value + 'T00:00:00').toLocaleDateString('default', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : ''
+
+function DayNoteModal({ isOpen, date, note, initialMode, enableRange = false, onClose, onSaved, onDeleted }) {
   const [mode, setMode] = useState('edit') // 'view' | 'edit'
   const [reason, setReason] = useState('other')
   const [text, setText] = useState('')
+  const [startDate, setStartDate] = useState(todayIso())
+  const [endDate, setEndDate] = useState(todayIso())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
@@ -32,12 +46,15 @@ function DayNoteModal({ isOpen, date, note, initialMode, onClose, onSaved, onDel
     setReason(note?.reason || 'other')
     setText(note?.note || '')
     setError(null)
+    const defaultDate = date || todayIso()
+    setStartDate(defaultDate)
+    setEndDate(defaultDate)
     if (initialMode === 'view' || initialMode === 'edit') {
       setMode(initialMode)
     } else {
       setMode(note?.id ? 'view' : 'edit')
     }
-  }, [isOpen, note, initialMode])
+  }, [isOpen, note, initialMode, date, enableRange])
 
   useEffect(() => {
     if (!isOpen || mode !== 'edit') return undefined
@@ -64,24 +81,42 @@ function DayNoteModal({ isOpen, date, note, initialMode, onClose, onSaved, onDel
   if (!isOpen) return null
 
   const isEditing = mode === 'edit'
-  const formattedDate = date
-    ? new Date(date + 'T00:00:00').toLocaleDateString('default', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
-    : ''
+  const isRangeCreate = enableRange && !note?.id
+  const formattedDate = isRangeCreate
+    ? startDate && endDate
+      ? startDate === endDate
+        ? formatNoteDate(startDate)
+        : `${formatNoteDate(startDate)} – ${formatNoteDate(endDate)}`
+      : 'Choose a date range'
+    : formatNoteDate(date)
 
   const handleSave = async () => {
     setSaving(true)
     setError(null)
     try {
-      const payload = { date, reason, note: text.trim() }
-      const res = note?.id
-        ? await updateDayNote(note.id, payload)
-        : await createDayNote(payload)
-      onSaved?.(res.data)
+      if (isRangeCreate) {
+        if (!startDate || !endDate) {
+          setError('Choose a start date and end date.')
+          return
+        }
+        if (endDate < startDate) {
+          setError('End date must be on or after the start date.')
+          return
+        }
+        const res = await createDayNotesRange({
+          start_date: startDate,
+          end_date: endDate,
+          reason,
+          note: text.trim(),
+        })
+        onSaved?.(res.data)
+      } else {
+        const payload = { date, reason, note: text.trim() }
+        const res = note?.id
+          ? await updateDayNote(note.id, payload)
+          : await createDayNote(payload)
+        onSaved?.(res.data)
+      }
       onClose()
     } catch (err) {
       console.error('Failed to save day note', err)
@@ -128,7 +163,9 @@ function DayNoteModal({ isOpen, date, note, initialMode, onClose, onSaved, onDel
       <div className="flex h-[min(85vh,36rem)] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900">
         <div className="mb-6 flex shrink-0 items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">Skip note</h2>
+            <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">
+              {isRangeCreate ? 'Add skip notes' : 'Skip note'}
+            </h2>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{formattedDate}</p>
           </div>
 
@@ -157,6 +194,36 @@ function DayNoteModal({ isOpen, date, note, initialMode, onClose, onSaved, onDel
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-4">
+          {isRangeCreate && isEditing && (
+            <div className="grid shrink-0 grid-cols-2 gap-3">
+              <label className="block">
+                <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Start date
+                </span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  disabled={saving}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500/30 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  End date
+                </span>
+                <input
+                  type="date"
+                  value={endDate}
+                  min={startDate || undefined}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  disabled={saving}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500/30 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                />
+              </label>
+            </div>
+          )}
+
           <div className="shrink-0">
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Skip reason
@@ -246,7 +313,7 @@ function DayNoteModal({ isOpen, date, note, initialMode, onClose, onSaved, onDel
                 disabled={saving}
                 className="flex-1 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
               >
-                {saving ? 'Saving…' : 'Save'}
+                {saving ? 'Saving…' : isRangeCreate ? 'Save notes' : 'Save'}
               </button>
             </div>
           ) : (
