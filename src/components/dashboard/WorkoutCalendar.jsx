@@ -23,6 +23,7 @@ function WorkoutCalendar({
   onUpsertWorkout,
   onRemoveWorkout,
   onUpsertDayNote,
+  onRemoveDayNote,
   onViewMonthChange,
 }) {
   const today = new Date()
@@ -30,7 +31,8 @@ function WorkoutCalendar({
   const [viewMonth, setViewMonth] = useState(today.getMonth())
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedWorkout, setSelectedWorkout] = useState(null)
-  const [panel, setPanel] = useState(null) // 'workout'
+  const [selectedNote, setSelectedNote] = useState(null)
+  const [panel, setPanel] = useState(null) // 'workout' | 'note'
   const [rangeModalOpen, setRangeModalOpen] = useState(false)
 
   useEffect(() => {
@@ -76,14 +78,22 @@ function WorkoutCalendar({
   const closePanels = () => {
     setSelectedDate(null)
     setSelectedWorkout(null)
+    setSelectedNote(null)
     setPanel(null)
     setRangeModalOpen(false)
   }
 
   const handleDayClick = (dateStr) => {
+    const workout = workoutMap[dateStr] || null
+    const note = noteMap[dateStr] || null
     setSelectedDate(dateStr)
-    setSelectedWorkout(workoutMap[dateStr] || null)
+    setSelectedWorkout(workout)
+    setSelectedNote(note)
     setRangeModalOpen(false)
+    if (note && !workout) {
+      setPanel('note')
+      return
+    }
     setPanel('workout')
   }
 
@@ -208,6 +218,7 @@ function WorkoutCalendar({
             setPanel(null)
             setSelectedDate(null)
             setSelectedWorkout(null)
+            setSelectedNote(null)
             setRangeModalOpen(true)
           }}
           aria-label="Add skip notes"
@@ -228,13 +239,28 @@ function WorkoutCalendar({
       />
 
       <DayNoteModal
-        isOpen={rangeModalOpen}
-        enableRange
-        onClose={() => setRangeModalOpen(false)}
+        isOpen={panel === 'note' || rangeModalOpen}
+        enableRange={rangeModalOpen}
+        date={rangeModalOpen ? null : selectedDate}
+        note={rangeModalOpen ? null : selectedNote}
+        initialMode={rangeModalOpen ? 'edit' : 'view'}
+        onClose={() => {
+          if (rangeModalOpen) {
+            setRangeModalOpen(false)
+            return
+          }
+          closePanels()
+        }}
         onSaved={(saved) => {
           const items = Array.isArray(saved) ? saved : [saved]
           items.forEach((item) => onUpsertDayNote?.(item))
-          setRangeModalOpen(false)
+          if (!rangeModalOpen && items[0]) setSelectedNote(items[0])
+          if (rangeModalOpen) setRangeModalOpen(false)
+        }}
+        onDeleted={(deleted) => {
+          onRemoveDayNote?.(deleted.id, deleted.date)
+          setSelectedNote(null)
+          closePanels()
         }}
       />
     </div>
