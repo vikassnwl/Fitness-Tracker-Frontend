@@ -180,7 +180,7 @@ function ExerciseLibraryPage() {
         <div>
           <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">Exercises</h2>
           <p className="text-slate-500 dark:text-slate-400">
-            Set the lifts for each training day. New lifts are added to already logged days of this split too.
+            Set the lifts for each training day. These show up automatically when you log sets.
           </p>
         </div>
         <button
